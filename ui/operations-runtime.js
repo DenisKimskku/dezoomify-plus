@@ -24,6 +24,7 @@
     var metricsPanelController = null;
     var asyncQueueController = null;
     var retentionController = null;
+    var adminConsoleController = null;
     var initialized = false;
 
     function getInitialStorageState() {
@@ -102,6 +103,17 @@
       return retentionController;
     }
 
+    function initializeAdminConsole() {
+      if (typeof window.createAdminConsoleController !== "function") return null;
+      adminConsoleController = window.createAdminConsoleController({
+        endpoint: opts.adminEndpoint || "/api/admin",
+      });
+      if (adminConsoleController && typeof adminConsoleController.initialize === "function") {
+        adminConsoleController.initialize();
+      }
+      return adminConsoleController;
+    }
+
     function initialize() {
       if (initialized) return true;
       initialized = true;
@@ -109,6 +121,7 @@
       initializeMetricsPanel();
       initializeAsyncPanel();
       initializeRetentionControls();
+      initializeAdminConsole();
       return true;
     }
 
@@ -152,6 +165,13 @@
       return asyncQueueController.getActivitySummary();
     }
 
+    async function refreshAdminSnapshot(force) {
+      if (!adminConsoleController || typeof adminConsoleController.refresh !== "function") {
+        return false;
+      }
+      return adminConsoleController.refresh(!!force);
+    }
+
     return {
       initialize: initialize,
       updateRateLimitSummary: updateRateLimitSummary,
@@ -160,6 +180,7 @@
       fetchMetricsSnapshot: fetchMetricsSnapshot,
       refreshAsyncJobs: refreshAsyncJobs,
       getAsyncActivitySummary: getAsyncActivitySummary,
+      refreshAdminSnapshot: refreshAdminSnapshot,
     };
   }
 

@@ -40,6 +40,10 @@
       "destination": "/api/observability?scope=metrics"
     },
     {
+      "source": "/api/admin",
+      "destination": "/api/observability?scope=admin"
+    },
+    {
       "source": "/api/benchmarks",
       "destination": "/api/observability?scope=benchmarks"
     },

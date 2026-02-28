@@ -252,6 +252,66 @@ var tests = [
       }
     );
   }),
+
+  test("admin snapshot endpoint is gated to admin role and supports role refresh on login", async function () {
+    await withHandlers(
+      {
+        AUTH_ENFORCE_ADVANCED: "true",
+        AUTH_OPEN_SIGNUP: "true",
+        ADMIN_EMAILS: "",
+      },
+      async function (ctx) {
+        var registerReq = createReq({
+          method: "POST",
+          query: { scope: "auth", action: "register" },
+          body: { email: "kor8821@gmail.com", password: "Password123" },
+        });
+        var registerRes = createRes();
+        await ctx.observability(registerReq, registerRes);
+        assert.strictEqual(registerRes.statusCode, 201);
+        var registerPayload = parseBody(registerRes);
+        assert.strictEqual(registerPayload.user.role, "user");
+
+        var userCookie = registerRes.headers["Set-Cookie"].split(";")[0];
+
+        var blockedAdminReq = createReq({
+          method: "GET",
+          query: { scope: "admin" },
+          headers: { cookie: userCookie },
+        });
+        var blockedAdminRes = createRes();
+        await ctx.observability(blockedAdminReq, blockedAdminRes);
+        assert.strictEqual(blockedAdminRes.statusCode, 403);
+
+        process.env.ADMIN_EMAILS = "kor8821@gmail.com";
+        var loginReq = createReq({
+          method: "POST",
+          query: { scope: "auth", action: "login" },
+          body: { email: "kor8821@gmail.com", password: "Password123" },
+        });
+        var loginRes = createRes();
+        await ctx.observability(loginReq, loginRes);
+        assert.strictEqual(loginRes.statusCode, 200);
+        var loginPayload = parseBody(loginRes);
+        assert.strictEqual(loginPayload.user.role, "admin");
+
+        var adminCookie = loginRes.headers["Set-Cookie"].split(";")[0];
+        var adminReq = createReq({
+          method: "GET",
+          query: { scope: "admin", owner_limit: "10", user_limit: "10" },
+          headers: { cookie: adminCookie },
+        });
+        var adminRes = createRes();
+        await ctx.observability(adminReq, adminRes);
+        assert.strictEqual(adminRes.statusCode, 200);
+        var adminPayload = parseBody(adminRes);
+        assert.strictEqual(adminPayload.ok, true);
+        assert.strictEqual(adminPayload.admin.email, "kor8821@gmail.com");
+        assert.strictEqual(adminPayload.admin.role, "admin");
+        assert.ok(adminPayload.users && Array.isArray(adminPayload.users.items));
+      }
+    );
+  }),
 ];
 
 async function run() {

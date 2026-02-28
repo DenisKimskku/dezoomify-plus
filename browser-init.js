@@ -24,6 +24,7 @@
     serverAsyncRetryBulkEndpoint: "/api/retry-bulk",
     serverAsyncRemoveBulkEndpoint: "/api/remove-bulk",
     serverAsyncCancelEndpoint: "/api/cancel",
+    serverAdminEndpoint: "/api/admin",
     serverSyncDebounceMs: 800,
     serverPollIntervalMs: 45000,
     serverRetryCooldownMs: 60000,

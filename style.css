@@ -618,7 +618,8 @@ body[data-authenticated="1"] #dashboard-shell {
 .job-pill.paused { background: #7a7364; }
 
 #rate-limit-summary,
-#metrics-summary {
+#metrics-summary,
+#admin-console-summary {
   margin: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -632,6 +633,28 @@ body[data-authenticated="1"] #dashboard-shell {
 #metrics-summary {
   max-height: 220px;
   overflow: auto;
+}
+
+#admin-console-summary {
+  max-height: 260px;
+  overflow: auto;
+}
+
+.admin-console-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.admin-console-section {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.admin-console-section h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--accent-ink);
 }
 
 .metrics-alerts,
@@ -762,7 +785,8 @@ body.download #advanced-access {
 
   .auth-grid,
   .mini-row,
-  .metrics-kpis {
+  .metrics-kpis,
+  .admin-console-grid {
     grid-template-columns: 1fr;
   }
 

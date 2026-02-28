@@ -4,6 +4,8 @@ const { appendBenchmarkRun, listBenchmarkRuns } = require("../lib/benchmark-tren
 const { createRequestObserver, getMetricsSnapshot } = require("../lib/observability");
 const { checkStorageHealth } = require("../lib/storage-service");
 const authService = require("../lib/auth-service");
+const { listOwnerIds: listJobOwnerIds, loadOwnerState } = require("../lib/jobs-service");
+const { listOwnerIds: listAsyncOwnerIds, listJobsForOwner } = require("../lib/async-service");
 
 function toSingle(value) {
   return Array.isArray(value) ? value[0] : value;
@@ -23,7 +25,7 @@ function sendAuthError(res, statusCode, code, message, extras) {
 function resolveScope(req) {
   const query = req.query || {};
   const queryScope = String(toSingle(query.scope || query.route || query.endpoint || "")).trim().toLowerCase();
-  if (["metrics", "benchmarks", "auth", "storage"].indexOf(queryScope) !== -1) {
+  if (["metrics", "benchmarks", "auth", "storage", "admin"].indexOf(queryScope) !== -1) {
     return queryScope;
   }
 
@@ -32,6 +34,7 @@ function resolveScope(req) {
   if (url.indexOf("/api/benchmarks") >= 0) return "benchmarks";
   if (url.indexOf("/api/auth") >= 0) return "auth";
   if (url.indexOf("/api/storage-health") >= 0) return "storage";
+  if (url.indexOf("/api/admin") >= 0) return "admin";
   return "";
 }
 
@@ -136,6 +139,22 @@ async function requireAuthenticatedUser(req, res) {
     (authResult && authResult.message) || "Sign in is required."
   );
   return null;
+}
+
+async function requireAdminUser(req, res) {
+  const authResult = await requireAuthenticatedUser(req, res);
+  if (!authResult) return null;
+  if (!authResult.user || authResult.user.role !== "admin") {
+    sendAuthError(res, 403, "FORBIDDEN", "Admin role is required.");
+    return null;
+  }
+  return authResult;
+}
+
+function parseBoundedInt(rawValue, fallbackValue, minValue, maxValue) {
+  const parsed = parseInt(rawValue, 10);
+  if (!Number.isFinite(parsed)) return fallbackValue;
+  return Math.min(Math.max(parsed, minValue), maxValue);
 }
 
 async function handleAuth(req, res) {
@@ -321,6 +340,148 @@ async function handleStorage(req, res) {
   return { statusCode: 200, reason: "storage_ok", backend: health.backend };
 }
 
+async function handleAdmin(req, res) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    sendAuthError(res, 405, "METHOD_NOT_ALLOWED", "Only GET requests are supported.");
+    return { statusCode: 405, reason: "method_not_allowed" };
+  }
+
+  const authResult = await requireAdminUser(req, res);
+  if (!authResult) {
+    return { statusCode: 403, reason: "forbidden" };
+  }
+
+  const query = req.query || {};
+  const ownerLimit = parseBoundedInt(toSingle(query.owner_limit || query.limit || 40), 40, 1, 200);
+  const asyncOwnerLimit = parseBoundedInt(toSingle(query.async_owner_limit || ownerLimit), ownerLimit, 1, 200);
+  const asyncPerOwnerLimit = parseBoundedInt(toSingle(query.async_per_owner_limit || 60), 60, 1, 120);
+  const userLimit = parseBoundedInt(toSingle(query.user_limit || 40), 40, 1, 200);
+  const userCursor = parseBoundedInt(toSingle(query.user_cursor || 0), 0, 0, 1000000);
+  const userRole = String(toSingle(query.user_role || "") || "").trim().toLowerCase();
+  const userQuery = String(toSingle(query.user_q || query.q || "") || "").trim();
+
+  const usersResult = await authService.listUsers({
+    limit: userLimit,
+    cursor: userCursor,
+    role: userRole,
+    query: userQuery,
+  });
+
+  const jobOwnerRegistry = await listJobOwnerIds();
+  const sampledJobOwners = (jobOwnerRegistry.owners || []).slice(0, ownerLimit);
+  const ownerRows = [];
+  let schedulesTotal = 0;
+  let schedulesActive = 0;
+  let historyTotal = 0;
+  let runningHistory = 0;
+
+  for (let i = 0; i < sampledJobOwners.length; i += 1) {
+    const ownerId = sampledJobOwners[i];
+    const loaded = await loadOwnerState(ownerId);
+    const state = loaded && loaded.state ? loaded.state : { schedules: [], history: [], updatedAt: Date.now() };
+    const schedules = Array.isArray(state.schedules) ? state.schedules : [];
+    const history = Array.isArray(state.history) ? state.history : [];
+    const activeScheduleCount = schedules.filter((entry) => entry && entry.status === "scheduled").length;
+    const runningHistoryCount = history.filter((entry) => entry && entry.status === "running").length;
+    schedulesTotal += schedules.length;
+    schedulesActive += activeScheduleCount;
+    historyTotal += history.length;
+    runningHistory += runningHistoryCount;
+    ownerRows.push({
+      ownerId: ownerId,
+      schedules: schedules.length,
+      scheduled: activeScheduleCount,
+      history: history.length,
+      running: runningHistoryCount,
+      updatedAt: state.updatedAt || null,
+    });
+  }
+
+  const asyncOwnerRegistry = await listAsyncOwnerIds();
+  const sampledAsyncOwners = (asyncOwnerRegistry.owners || []).slice(0, asyncOwnerLimit);
+  const asyncRows = [];
+  const asyncStatusTotals = {
+    queued: 0,
+    running: 0,
+    completed: 0,
+    error: 0,
+    expired: 0,
+    canceled: 0,
+    other: 0,
+  };
+
+  for (let j = 0; j < sampledAsyncOwners.length; j += 1) {
+    const ownerId = sampledAsyncOwners[j];
+    const listed = await listJobsForOwner(ownerId, {
+      limit: asyncPerOwnerLimit,
+      cursor: 0,
+    });
+    const jobs = Array.isArray(listed.jobs) ? listed.jobs : [];
+    const rowCounts = {
+      queued: 0,
+      running: 0,
+      completed: 0,
+      error: 0,
+      expired: 0,
+      canceled: 0,
+      other: 0,
+    };
+    for (let k = 0; k < jobs.length; k += 1) {
+      const status = String((jobs[k] && jobs[k].status) || "").trim().toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(rowCounts, status)) {
+        rowCounts[status] += 1;
+        asyncStatusTotals[status] += 1;
+      } else {
+        rowCounts.other += 1;
+        asyncStatusTotals.other += 1;
+      }
+    }
+    asyncRows.push({
+      ownerId: ownerId,
+      jobsTotal: Number(listed.total || 0),
+      sampledJobs: jobs.length,
+      counts: rowCounts,
+      backend: listed.backend || "unknown",
+    });
+  }
+
+  sendJSON(res, 200, {
+    ok: true,
+    at: new Date().toISOString(),
+    admin: authService.toPublicUser(authResult.user),
+    users: {
+      items: usersResult.items || [],
+      total: Number(usersResult.total || 0),
+      cursor: Number(usersResult.cursor || 0),
+      nextCursor: usersResult.nextCursor || null,
+      limit: Number(usersResult.limit || userLimit),
+      role: usersResult.role || "",
+      q: usersResult.query || "",
+      sourceTotal: Number(usersResult.sourceTotal || 0),
+    },
+    jobs: {
+      ownersSeen: Number((jobOwnerRegistry.owners || []).length || 0),
+      ownersSampled: ownerRows.length,
+      backend: jobOwnerRegistry.backend || "unknown",
+      schedulesTotal: schedulesTotal,
+      schedulesActive: schedulesActive,
+      historyTotal: historyTotal,
+      runningHistory: runningHistory,
+      owners: ownerRows,
+    },
+    async: {
+      ownersSeen: Number((asyncOwnerRegistry.owners || []).length || 0),
+      ownersSampled: asyncRows.length,
+      backend: asyncOwnerRegistry.backend || "unknown",
+      sampledPerOwner: asyncPerOwnerLimit,
+      statusTotals: asyncStatusTotals,
+      owners: asyncRows,
+    },
+  });
+  return { statusCode: 200, reason: "admin_snapshot" };
+}
+
 async function handleMetrics(req, res) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
@@ -421,6 +582,8 @@ module.exports = async function handler(req, res) {
         ? "auth"
         : scope === "storage"
           ? "storage"
+          : scope === "admin"
+            ? "admin"
           : "observability";
   const finish = createRequestObserver(metricName, req);
 
@@ -437,6 +600,8 @@ module.exports = async function handler(req, res) {
     result = await handleBenchmarks(req, res);
   } else if (scope === "auth") {
     result = await handleAuth(req, res);
+  } else if (scope === "admin") {
+    result = await handleAdmin(req, res);
   } else {
     result = await handleStorage(req, res);
   }

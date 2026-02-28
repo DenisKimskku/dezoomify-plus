@@ -21,6 +21,7 @@
     var SERVER_ASYNC_RETRY_BULK_ENDPOINT = String(opts.serverAsyncRetryBulkEndpoint || "/api/retry-bulk");
     var SERVER_ASYNC_REMOVE_BULK_ENDPOINT = String(opts.serverAsyncRemoveBulkEndpoint || "/api/remove-bulk");
     var SERVER_ASYNC_CANCEL_ENDPOINT = String(opts.serverAsyncCancelEndpoint || "/api/cancel");
+    var SERVER_ADMIN_ENDPOINT = String(opts.serverAdminEndpoint || "/api/admin");
     var SERVER_SYNC_DEBOUNCE_MS = parseInt(opts.serverSyncDebounceMs, 10) || 800;
     var SERVER_POLL_INTERVAL_MS = parseInt(opts.serverPollIntervalMs, 10) || 45000;
     var SERVER_RETRY_COOLDOWN_MS = parseInt(opts.serverRetryCooldownMs, 10) || 60000;
@@ -232,6 +233,21 @@
       return operationsRuntime.refreshAsyncJobs(!!force);
     }
 
+    function isAdminAuthenticated() {
+      if (!authController || typeof authController.getUser !== "function") return false;
+      var user = authController.getUser();
+      return !!(user && user.role === "admin");
+    }
+
+    async function refreshAdminSnapshot(force) {
+      if (!isAdvancedAccessAllowed()) return false;
+      if (!isAdminAuthenticated()) return false;
+      if (!operationsRuntime || typeof operationsRuntime.refreshAdminSnapshot !== "function") {
+        return false;
+      }
+      return operationsRuntime.refreshAdminSnapshot(!!force);
+    }
+
     function getAsyncActivitySummary() {
       if (!operationsRuntime || typeof operationsRuntime.getAsyncActivitySummary !== "function") {
         return { total: 0, pending: 0, retryBlockedUntilMs: 0 };
@@ -378,6 +394,7 @@
           if (isAdvancedAccessAllowed()) {
             refreshAsyncJobs(true);
             fetchMetricsSnapshot(true);
+            refreshAdminSnapshot(true);
             fetchServerState(true, false);
           }
         },
@@ -447,6 +464,7 @@
         asyncCancelEndpoint: SERVER_ASYNC_CANCEL_ENDPOINT,
         asyncStorageKey: "dezoomify:async-tracked-jobs:v1",
         asyncMaxItems: 120,
+        adminEndpoint: SERVER_ADMIN_ENDPOINT,
       });
       operationsRuntime.initialize();
     }

@@ -124,6 +124,7 @@
             <button type="button" class="dashboard-tab" data-tab="schedule" role="tab" aria-selected="false">Schedules</button>
             <button type="button" class="dashboard-tab" data-tab="metrics" role="tab" aria-selected="false">Metrics</button>
             <button type="button" class="dashboard-tab" data-tab="settings" role="tab" aria-selected="false">Settings</button>
+            <button type="button" class="dashboard-tab" data-tab="admin" role="tab" aria-selected="false" hidden>Admin</button>
           </div>
         </div>
 
@@ -323,6 +324,29 @@
               <p class="ops-note" id="onboarding-checklist">Checklist: sign in, rotate API key, test async submit, test schedule, verify history.</p>
             </article>
           </section>
+
+          <section class="dashboard-panel" data-panel="admin" aria-label="Admin console panel">
+            <article class="ops-card" id="admin-card">
+              <h2>Admin Console</h2>
+              <p id="admin-console-status" class="ops-note">Admin snapshot unavailable.</p>
+              <div class="mini-actions">
+                <button type="button" id="admin-console-refresh" class="secondary-action">Refresh Admin Snapshot</button>
+              </div>
+              <pre id="admin-console-summary">No admin snapshot loaded.</pre>
+              <div class="admin-console-grid">
+                <div class="admin-console-section">
+                  <h3>Users</h3>
+                  <p id="admin-users-empty" class="ops-empty">No users loaded.</p>
+                  <div id="admin-users-list" class="ops-list"></div>
+                </div>
+                <div class="admin-console-section">
+                  <h3>Owners</h3>
+                  <p id="admin-owners-empty" class="ops-empty">No owners loaded.</p>
+                  <div id="admin-owners-list" class="ops-list"></div>
+                </div>
+              </div>
+            </article>
+          </section>
         </div>
       </section>
           </div>
@@ -379,6 +403,7 @@
   <script type="text/javascript" src="ui/history-panel.js"></script>
   <script type="text/javascript" src="ui/schedule-panel.js"></script>
   <script type="text/javascript" src="ui/async-queue.js"></script>
+  <script type="text/javascript" src="ui/admin-console.js"></script>
   <script type="text/javascript" src="ui/operations-runtime.js"></script>
   <script type="text/javascript" src="ui/bootstrap-runtime.js"></script>
   <script type="text/javascript" src="ui/bootstrap-bridge.js"></script>
