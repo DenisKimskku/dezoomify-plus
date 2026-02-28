@@ -90,6 +90,12 @@ var iiif = (function () {
           "quality": searchWithDefault(data.qualities, "native", "default"),
           "format": searchWithDefault(data.formats, "png", "jpg")
         };
+        if (isReliableTileMetadata(data, tiles, returned_data)) {
+          // Modern IIIF manifests usually provide valid tile metadata.
+          // Skip probing the first tile to reduce one startup network request.
+          ZoomManager.readyToRender(returned_data);
+          return;
+        }
         var img = new Image; // Load a tile to find out the real tile size
         img.src = getTileURL(0, 0, returned_data.maxZoomLevel, returned_data);
         img.addEventListener("load", function () {
@@ -131,6 +137,24 @@ var iiif = (function () {
       "0" + "/" + //rotation
       data.quality + "." + //quality
       data.format; //format
+  }
+
+  function isReliableTileMetadata(rawData, tiles, parsedData) {
+    if (!rawData || !tiles || !parsedData) return false;
+    if (!rawData.tiles || !rawData.tiles.length) return false;
+
+    var tileWidth = parseInt(tiles.width, 10);
+    var maxDimension = Math.max(parsedData.width || 0, parsedData.height || 0);
+    if (!isFinite(tileWidth) || tileWidth <= 0 || tileWidth > maxDimension) {
+      return false;
+    }
+
+    if (!tiles.scaleFactors || !tiles.scaleFactors.length) return false;
+    for (var i = 0; i < tiles.scaleFactors.length; i++) {
+      var sf = parseInt(tiles.scaleFactors[i], 10);
+      if (!isFinite(sf) || sf <= 0) return false;
+    }
+    return true;
   }
 })();
 ZoomManager.addDezoomer(iiif);

@@ -100,6 +100,331 @@ php -S localhost:3000
 
 Then open http://localhost:3000/ in your browser.
 
+### Deterministic jobs tests
+
+The server-side jobs/scheduling logic includes deterministic, zero-network tests:
+
+```bash
+cd tests
+npm run test:jobs
+```
+
+### Deterministic proxy tests
+
+The Vercel proxy handler also has deterministic, zero-network regression tests:
+
+```bash
+cd tests
+npm run test:proxy
+```
+
+### Deterministic metrics tests
+
+The `/api/metrics` auth and response behavior has deterministic tests:
+
+```bash
+cd tests
+npm run test:metrics
+```
+
+### Deterministic benchmark API tests
+
+The benchmark trend API (`/api/benchmarks`) is covered by deterministic tests:
+
+```bash
+cd tests
+npm run test:benchmarks
+```
+
+### Deterministic observability alert tests
+
+5xx/quota alert threshold behavior in the observability layer is covered by deterministic tests:
+
+```bash
+cd tests
+npm run test:observability
+```
+
+### Deterministic async service tests
+
+The async submit/status/download service is covered by deterministic tests:
+
+```bash
+cd tests
+npm run test:async-service
+npm run test:async-handlers
+npm run test:cron
+```
+
+### Deterministic IIIF tests
+
+IIIF fast-path and fallback probe behavior is covered by deterministic tests:
+
+```bash
+cd tests
+npm run test:iiif
+```
+
+### Deterministic queue/backoff tests
+
+Tile queue/adaptive backoff logic (including worker-render fallback behavior) in `zoommanager.js` is covered by deterministic tests:
+
+```bash
+cd tests
+npm run test:zoommanager
+```
+
+### Jobs-state benchmark
+
+Run a quick local benchmark for schedule processing throughput:
+
+```bash
+cd tests
+npm run bench:jobs
+```
+
+You can also provide custom values:
+
+```bash
+node bench-jobs-state.js 2000 500
+```
+
+> The benchmark follows service caps (`JOBS_MAX_SCHEDULES`, default `120`).
+
+CI guardrails can be enabled with:
+
+- `BENCH_MAX_PER_JOB_MS`
+- `BENCH_MAX_DURATION_MS`
+- `BENCH_OUTPUT_FILE` (optional JSON artifact output path)
+
+Optional trend publish command:
+
+```bash
+node publish-bench-trend.js ./bench-jobs.json
+```
+
+With environment variables:
+
+- `BENCHMARK_TREND_ENDPOINT` (deployed `/api/benchmarks` URL)
+- `BENCHMARK_WRITE_TOKEN` (if configured)
+- `BENCHMARK_SUITE` (defaults to `jobs-state`)
+
+## Deploy on Vercel
+
+This repository can be deployed directly as a Vercel app.
+
+1. Import the repository in Vercel.
+2. Keep the root directory as-is.
+3. Deploy.
+
+The project includes:
+- `/api/proxy` as a serverless proxy endpoint.
+- `/api/jobs` for persisted schedule/history state.
+- `/api/cron` for background schedule execution.
+- `/api/metrics` for runtime service metrics snapshots.
+- `/api/benchmarks` for persistent benchmark trend history.
+- `/api/submit`, `/api/status`, `/api/download`, `/api/list`, `/api/history`, `/api/retry`, `/api/retry-bulk`, `/api/remove-bulk`, `/api/cancel` for async artifact jobs and operations UX.
+- `vercel.json` rewrite from `/proxy.php` to `/api/proxy` for compatibility with existing frontend code.
+- `vercel.json` cron entry (`*/5 * * * *`) that hits `/api/cron`.
+
+Primary hosted target is Vercel serverless + optional Vercel KV REST. Non-Vercel adapters are maintained as legacy paths.
+
+## Embed in your website
+
+You can link users directly with prefilled URL parameters:
+
+- `?url=...` : prefill the target URL.
+- `?autostart=1` : auto-start download after page load.
+- `?concurrency=12` : set initial download speed.
+- `?worker_render=0` : force classic main-thread rendering mode (disable worker/offscreen path).
+- `?api_key=...` : preload API key into the UI/session.
+- `?metrics_token=...` : preload metrics token for the Service Metrics panel.
+
+> In browser-based deployments, API keys are user-visible. Use scoped keys with limited quotas.
+
+Example:
+
+```text
+https://your-dezoomify-app.vercel.app/?url=https%3A%2F%2Fmap-view.nls.uk%2Fiiif%2F19619%252F196194600%2Finfo.json&autostart=1
+```
+
+## UX features for hosted deployments
+
+The web UI now includes:
+
+- **Service Limits** card: shows proxy request quota, remaining requests, and reset countdown.
+- **Service Metrics** card: fetches `/api/metrics`, with optional token, auto-refresh, active alerts, KPI summary, and sparkline charts.
+- **Scheduled Jobs** card: create one-time/hourly/daily jobs with automatic server sync when `/api/jobs` is available.
+- **Async Queue** card: submit async jobs, poll status, retry jobs, and download finished artifacts.
+- **Job History** card: run history with status/query filters, pagination, and quick rerun.
+- **Retention** card: configure browser-local history and async-finished retention windows.
+- Automatic off-main-thread tile rendering in supported browsers (Web Worker + OffscreenCanvas), with fallback to classic mode.
+
+Storage fallback behavior:
+
+- If `/api/jobs` is reachable, schedules/history are persisted on the server.
+- If not, the UI automatically falls back to browser local storage.
+
+## Always-on scheduling (Vercel Cron + server state)
+
+This repo now supports always-on schedule execution through `/api/cron`.
+
+Recommended environment variables:
+
+- `CRON_SECRET` (optional but recommended): if set, `/api/cron` requires this secret (query, `x-cron-secret`, or `Authorization: Bearer ...`).
+- `CRON_MAX_JOBS_PER_RUN` (default: `25`): cap scheduled jobs handled per cron invocation.
+- `JOBS_MAX_SCHEDULES` (default: `120`): max schedules stored per owner.
+- `JOBS_MAX_HISTORY` (default: `200`): max history entries stored per owner.
+- `JOBS_PROBE_TIMEOUT_MS` (default: `15000`): timeout for each scheduled URL probe.
+- `JOBS_PROBE_MAX_REDIRECTS` (default: `2`): redirect cap for scheduled URL probe.
+- `JOBS_MIN_URL_SPACING_MS` (default: `60000`): minimum spacing between identical schedule URLs in a cron pass.
+- `JOBS_HISTORY_RETENTION_MS` (default: `2592000000`): server-side history retention window.
+- `ASYNC_CLEANUP_MAX_JOBS_PER_CRON_RUN` (default: `120`): async cleanup scan budget per cron run.
+- `ASYNC_CLEANUP_EXPIRED_GRACE_MS` (default: `3600000`): grace period after expiry before async jobs are purged.
+- `ASYNC_FINISHED_RETENTION_MS` (default: `604800000`): purge completed/error/canceled async jobs older than this retention window.
+- `JOBS_REQUIRE_API_KEY` / `JOBS_DISABLE_ANON`: optional overrides for jobs API auth mode. Defaults inherit `API_AUTH_REQUIRED` / `API_DISABLE_ANON`.
+- `JOBS_STATE_KEY_PREFIX` / `JOBS_OWNER_REGISTRY_KEY`: optional key namespace overrides in KV.
+
+`/api/cron` also runs async queue housekeeping (owner-scoped expired-job cleanup) when async APIs are enabled.
+
+State backend:
+
+- Uses `KV_REST_API_URL` + `KV_REST_API_TOKEN` when configured.
+- Falls back to in-memory state if KV is unavailable.
+
+## Async service API (`submit/status/download/list/history/retry/retry-bulk/remove-bulk/cancel`)
+
+The service exposes an async artifact flow with resumable download support.
+
+Endpoints:
+
+- `POST /api/submit` with JSON body: `{ "url": "https://..." }`
+- `GET /api/status?id=<job_id>`
+- `GET /api/download?id=<job_id>`
+- `GET /api/list?status=queued,error&limit=30&cursor=0&q=<search>`
+- `GET /api/history?status=error&limit=20&cursor=0&q=<search>`
+- `POST /api/retry` with JSON body: `{ "id": "<job_id>" }`
+- `POST /api/retry-bulk` with JSON body: `{ "ids": ["<job_id>", "..."] }`
+- `POST /api/remove-bulk` with JSON body: `{ "ids": ["<job_id>", "..."] }`
+- `POST /api/cancel` with JSON body: `{ "id": "<job_id>" }`
+
+Notes:
+
+- `/api/download` supports `Range` headers (`Accept-Ranges: bytes`) for resumable transfers.
+- `POST /api/submit` supports `process_now=1` (query or body) to process the new job immediately.
+- `POST /api/retry` supports `process_now=1` (query or body) to process the retried job immediately.
+- `POST /api/retry-bulk` supports `process_now=1` (query or body) for immediate processing.
+- `/api/list` is owner-scoped and supports `status`, `limit`, `cursor`, and `q` filters.
+- `/api/history` is owner-scoped and supports `status`, `limit`, `cursor`, and `q` filters.
+- `POST /api/cancel` cancels `queued` async jobs and returns `409` for non-cancelable states.
+- `/api/retry-bulk` and `/api/remove-bulk` are owner-scoped and capped by `ASYNC_BULK_MAX_IDS`.
+
+Environment variables:
+
+- `ASYNC_SUBMIT_PROCESS_NOW` (`true`/`false`, default `false`)
+- `ASYNC_MAX_JOBS_PER_OWNER` (default `200`)
+- `ASYNC_MAX_JOBS_PER_CRON_RUN` (default `20`)
+- `ASYNC_CLEANUP_MAX_JOBS_PER_CRON_RUN` (default `120`)
+- `ASYNC_CLEANUP_EXPIRED_GRACE_MS` (default `3600000`)
+- `ASYNC_FINISHED_RETENTION_MS` (default `604800000`)
+- `ASYNC_BULK_MAX_IDS` (default `80`)
+- `ASYNC_LIST_MAX_LIMIT` (default `120`)
+- `ASYNC_JOB_TTL_MS` (default `86400000`)
+- `ASYNC_ARTIFACT_TTL_MS` (default `ASYNC_JOB_TTL_MS`)
+- `ASYNC_MAX_ARTIFACT_BYTES` (default `8388608`)
+- `ASYNC_ARTIFACT_STORAGE_MODE` (`auto`, `inline`, `chunked`; default `auto`)
+- `ASYNC_MAX_INLINE_ARTIFACT_BYTES` (default `1048576`)
+- `ASYNC_ARTIFACT_CHUNK_BYTES` (default `196608`)
+- `ASYNC_MAX_ARTIFACT_CHUNKS` (default `128`)
+- `ASYNC_PROBE_TIMEOUT_MS` (default `15000`)
+- `ASYNC_PROBE_MAX_REDIRECTS` (default `2`)
+- `ASYNC_PROBE_USER_AGENT` (optional)
+- `ASYNC_OWNER_REGISTRY_KEY`, `ASYNC_OWNER_JOBS_KEY_PREFIX`, `ASYNC_JOB_KEY_PREFIX`, `ASYNC_ARTIFACT_CHUNK_KEY_PREFIX` (optional KV key namespace overrides)
+
+## Observability
+
+The API layer now emits structured JSON request logs and keeps in-memory coarse metrics buckets.
+
+Environment variables:
+
+- `OBSERVABILITY_ENABLED` (`true`/`false`, default `true`)
+- `OBS_SUCCESS_LOG_SAMPLE_RATE` (default `0.02`)
+- `OBS_RECENT_BUCKET_LIMIT` (default `90`)
+- `OBS_BUCKET_RETENTION_MINUTES` (default `180`)
+- `OBS_ALERT_WINDOW_MINUTES` (default `5`)
+- `OBS_ALERT_MIN_REQUESTS` (default `25`)
+- `OBS_ALERT_5XX_WARN_RATIO` / `OBS_ALERT_5XX_CRIT_RATIO` (defaults `0.05` / `0.15`)
+- `OBS_ALERT_QUOTA_WARN_PER_MIN` / `OBS_ALERT_QUOTA_CRIT_PER_MIN` (defaults `4` / `10`)
+- `METRICS_READ_TOKEN` (optional; if set, required for `/api/metrics`)
+
+Metrics endpoint:
+
+- `GET /api/metrics` returns per-process counters snapshot.
+- Snapshot includes rolling minute buckets (`recentBuckets`) and computed `rollups`/`alerts`.
+- Auth if configured:
+  - `Authorization: Bearer <METRICS_READ_TOKEN>`
+  - or header `x-metrics-token`
+  - or query `?token=...`
+
+## Benchmark trend persistence
+
+Use `/api/benchmarks` to persist benchmark history outside CI artifacts.
+
+Environment variables:
+
+- `BENCHMARK_READ_TOKEN` (optional; required for GET when set)
+- `BENCHMARK_WRITE_TOKEN` (optional; required for POST when set; defaults to read token)
+- `BENCHMARK_HISTORY_MAX` (default `240`)
+- `BENCHMARK_HISTORY_KEY_PREFIX` (default `dz:bench:history:v1:`)
+
+API:
+
+- `GET /api/benchmarks?suite=jobs-state&limit=30`
+- `POST /api/benchmarks` with JSON body:
+  - `suite` (string)
+  - `report` (object)
+  - `metadata` (object)
+
+Storage backend:
+
+- Uses `KV_REST_API_URL` + `KV_REST_API_TOKEN` when configured.
+- Falls back to in-memory storage when KV is unavailable.
+
+## Vercel rate-limit configuration
+
+The `/api/proxy` route supports configurable per-IP limits via environment variables:
+
+- `RATE_LIMIT_MAX_REQUESTS` (default: `180`)
+- `RATE_LIMIT_WINDOW_MS` (default: `60000`)
+
+## API auth and persistent quotas
+
+The Vercel proxy also supports API-key auth and quota tracking.
+
+Environment variables:
+
+- `API_AUTH_REQUIRED` (`true`/`false`): require a valid API key for all requests.
+- `API_DISABLE_ANON` (`true`/`false`): disable anonymous traffic unless API key is provided.
+- `API_KEY_CONFIG_JSON`: JSON object mapping API keys to plans.
+- `API_DEFAULT_DAILY_QUOTA` / `API_DEFAULT_MINUTE_QUOTA`: default plan limits for configured keys.
+- `API_ANON_DAILY_QUOTA` / `API_ANON_MINUTE_QUOTA`: limits for anonymous users.
+
+Example `API_KEY_CONFIG_JSON`:
+
+```json
+{
+  "dz_live_key_1": { "label": "denis-main", "dailyQuota": 12000, "minuteQuota": 240 },
+  "dz_partner_key": { "label": "partner-a", "dailyQuota": 6000, "minuteQuota": 120 }
+}
+```
+
+Persistent backend (recommended on Vercel):
+
+- `KV_REST_API_URL`
+- `KV_REST_API_TOKEN`
+
+If KV is not configured, quotas fall back to in-memory counters (not durable across cold starts).
+
 ## GPL
 > Copyright © 2011-2017 Lovasoa
 >

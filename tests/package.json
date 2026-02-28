@@ -12,8 +12,25 @@
   },
   "devDependencies": {},
   "scripts": {
-    "test": "./node_modules/karma/bin/karma start"
+    "test": "./node_modules/karma/bin/karma start",
+    "test:jobs": "node jobs-service.test.js",
+    "test:proxy": "node proxy-handler.test.js",
+    "test:metrics": "node metrics-handler.test.js",
+    "test:benchmarks": "node benchmarks-handler.test.js",
+    "test:observability": "node observability-alerts.test.js",
+    "test:async-service": "node async-service.test.js",
+    "test:async-handlers": "node async-handlers.test.js",
+    "test:history-handler": "node history-handler.test.js",
+    "test:cron": "node cron-handler.test.js",
+    "test:iiif": "node iiif-fastpath.test.js",
+    "test:zoommanager": "node zoommanager-queue.test.js",
+    "test:frontend-smoke": "node frontend-smoke.test.js",
+    "test:async-ui-perf": "node async-ui-perf.test.js",
+    "bench:jobs": "node bench-jobs-state.js 500 500",
+    "bench:jobs:ci": "node bench-jobs-state.js 120 120",
+    "bench:async:endpoints": "node bench-async-endpoints.js",
+    "bench:publish": "node publish-bench-trend.js"
   },
   "author": "",
-  "license": "GPL"
+  "license": "GPL-2.0-or-later"
 }

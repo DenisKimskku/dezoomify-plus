@@ -92,10 +92,196 @@
         <input type='url' tabindex="10" id='url' title="Enter the URL of the webpage containing your zoomable image"
           placeholder="URL of the webpage containing your image" autofocus>
       </p>
+      <div id="quick-actions">
+        <button type="button" id="paste-url" class="secondary-action" title="Paste a URL from your clipboard">Paste URL</button>
+        <button type="button" class="secondary-action example-url" data-example-url="https://map-view.nls.uk/iiif/19619%2F196194600/info.json"
+          title="Use a public IIIF sample URL">Try sample URL</button>
+      </div>
+      <div id="performance-controls">
+        <label for="tile-concurrency">Download speed:</label>
+        <input type="range" id="tile-concurrency" min="2" max="20" step="1" value="12"
+          title="Higher values can be faster, but may trigger rate limits on some websites.">
+        <span id="tile-concurrency-value">12</span>
+      </div>
       <p id="dezoomers"></p>
       <input type='submit' tabindex="30" class="button" value="Dezoomify !"
         title="Click to start downloading the image">
     </form>
+
+    <section id="operations">
+      <article class="ops-card" id="limits-card">
+        <h2>Service Limits</h2>
+        <div class="mini-form" id="api-key-form">
+          <input type="password" id="api-key-input" placeholder="Optional API key">
+          <div class="mini-actions">
+            <button type="button" id="api-key-save" class="secondary-action">Save Key</button>
+            <button type="button" id="api-key-clear" class="secondary-action">Clear Key</button>
+          </div>
+        </div>
+        <p id="rate-limit-summary">Waiting for first proxy request.</p>
+        <p id="jobs-storage-mode" class="ops-note">Storage mode: browser local (offline fallback).</p>
+        <p class="ops-note">This helps keep the service stable when traffic spikes. API key is stored in your browser only.</p>
+      </article>
+      <article class="ops-card" id="metrics-card">
+        <h2>Service Metrics</h2>
+        <div class="mini-form" id="metrics-form">
+          <input type="password" id="metrics-token-input" placeholder="Optional metrics token">
+          <div class="mini-actions">
+            <button type="button" id="metrics-token-save" class="secondary-action">Save Token</button>
+            <button type="button" id="metrics-token-clear" class="secondary-action">Clear Token</button>
+            <button type="button" id="metrics-refresh" class="secondary-action">Refresh</button>
+            <label class="inline-toggle">
+              <input type="checkbox" id="metrics-auto-refresh" checked>
+              Auto
+            </label>
+          </div>
+        </div>
+        <p id="metrics-status" class="ops-note">Waiting for metrics snapshot.</p>
+        <div id="metrics-alerts" class="metrics-alerts">
+          <p class="ops-empty">No active alerts.</p>
+        </div>
+        <div id="metrics-kpis" class="metrics-kpis">
+          <div class="metric-kpi">
+            <span class="metric-kpi-label">Requests (window)</span>
+            <strong id="metrics-kpi-requests">0</strong>
+          </div>
+          <div class="metric-kpi">
+            <span class="metric-kpi-label">5xx Ratio</span>
+            <strong id="metrics-kpi-error-rate">0%</strong>
+          </div>
+          <div class="metric-kpi">
+            <span class="metric-kpi-label">Quota Blocks/min</span>
+            <strong id="metrics-kpi-quota">0</strong>
+          </div>
+        </div>
+        <p id="metrics-change" class="ops-note">No trend delta yet.</p>
+        <div class="metrics-charts">
+          <div class="metrics-chart">
+            <p class="metrics-chart-title">Requests per minute</p>
+            <svg id="metrics-chart-requests" viewBox="0 0 220 52" preserveAspectRatio="none" aria-label="Requests per minute chart"></svg>
+          </div>
+          <div class="metrics-chart">
+            <p class="metrics-chart-title">Errors + quota blocks per minute</p>
+            <svg id="metrics-chart-health" viewBox="0 0 220 52" preserveAspectRatio="none" aria-label="Errors and quota chart"></svg>
+          </div>
+        </div>
+        <pre id="metrics-summary">No metrics loaded.</pre>
+      </article>
+      <article class="ops-card" id="schedule-card">
+        <h2>Scheduled Jobs</h2>
+        <form id="schedule-form" class="mini-form" action="#">
+          <input type="url" id="schedule-url" placeholder="https://example.com/zoomable-page" required>
+          <div class="mini-row">
+            <input type="datetime-local" id="schedule-time" required>
+            <select id="schedule-repeat">
+              <option value="none">One-time</option>
+              <option value="hourly">Every hour</option>
+              <option value="daily">Every day</option>
+            </select>
+          </div>
+          <div class="mini-actions">
+            <button type="submit" class="secondary-action">Add Schedule</button>
+            <button type="button" id="schedule-use-current" class="secondary-action">Use Current URL</button>
+          </div>
+        </form>
+        <p id="schedule-status" class="ops-note">Schedule panel ready.</p>
+        <p id="schedule-empty" class="ops-empty">No scheduled jobs.</p>
+        <div id="schedule-list" class="ops-list"></div>
+      </article>
+      <article class="ops-card" id="async-card">
+        <h2>Async Queue</h2>
+        <form id="async-form" class="mini-form" action="#">
+          <input type="url" id="async-url" placeholder="https://example.com/zoomable-page" required>
+          <div class="mini-actions">
+            <button type="submit" class="secondary-action">Submit Job</button>
+            <button type="button" id="async-use-current" class="secondary-action">Use Current URL</button>
+            <label class="inline-toggle">
+              <input type="checkbox" id="async-process-now">
+              Process now
+            </label>
+          </div>
+        </form>
+        <div id="async-filters" class="mini-form">
+          <div class="mini-row">
+            <select id="async-filter-status" aria-label="Filter async jobs by status">
+              <option value="">All statuses</option>
+              <option value="queued">Queued</option>
+              <option value="running">Running</option>
+              <option value="completed">Completed</option>
+              <option value="error">Error</option>
+              <option value="expired">Expired</option>
+              <option value="canceled">Canceled</option>
+              <option value="missing">Missing</option>
+            </select>
+            <input type="search" id="async-filter-query" placeholder="Search id, URL, or message">
+          </div>
+          <div class="mini-actions">
+            <button type="button" id="async-filter-apply" class="secondary-action">Apply</button>
+            <button type="button" id="async-filter-reset" class="secondary-action">Reset</button>
+            <button type="button" id="async-bulk-retry-failed" class="secondary-action">Retry Visible Failed</button>
+            <button type="button" id="async-bulk-remove-finished" class="secondary-action">Remove Visible Finished</button>
+          </div>
+        </div>
+        <div class="mini-actions">
+          <button type="button" id="async-refresh" class="secondary-action">Refresh</button>
+          <button type="button" id="async-clear-local" class="secondary-action">Clear Tracked</button>
+          <label class="inline-toggle">
+            <input type="checkbox" id="async-auto-refresh" checked>
+            Auto
+          </label>
+        </div>
+        <p id="async-status" class="ops-note">No async jobs submitted yet.</p>
+        <p id="async-empty" class="ops-empty">No tracked async jobs.</p>
+        <div id="async-list" class="ops-list"></div>
+        <button type="button" id="async-load-more" class="secondary-action" style="display:none">Load More</button>
+      </article>
+      <article class="ops-card" id="history-card">
+        <h2>Job History</h2>
+        <div class="mini-form" id="history-filters">
+          <div class="mini-row">
+            <select id="history-filter-status" aria-label="Filter history by status">
+              <option value="">All statuses</option>
+              <option value="success">Success</option>
+              <option value="error">Error</option>
+              <option value="running">Running</option>
+            </select>
+            <input type="search" id="history-filter-query" placeholder="Search URL, message, id">
+          </div>
+          <div class="mini-actions">
+            <button type="button" id="history-filter-apply" class="secondary-action">Apply</button>
+            <button type="button" id="history-filter-reset" class="secondary-action">Reset</button>
+          </div>
+        </div>
+        <div class="mini-actions">
+          <button type="button" id="clear-history" class="secondary-action">Clear History</button>
+        </div>
+        <p id="history-status" class="ops-note">History view ready.</p>
+        <div class="mini-actions">
+          <button type="button" id="history-page-prev" class="secondary-action">Previous</button>
+          <button type="button" id="history-page-next" class="secondary-action">Next</button>
+          <span id="history-page-info" class="ops-note">Page 1</span>
+        </div>
+        <p id="history-empty" class="ops-empty">No jobs yet.</p>
+        <div id="history-list" class="ops-list"></div>
+      </article>
+      <article class="ops-card" id="retention-card">
+        <h2>Retention</h2>
+        <div class="mini-form">
+          <label>
+            History keep-days
+            <input type="number" min="1" max="3650" step="1" id="retention-history-days" value="30">
+          </label>
+          <label>
+            Async finished keep-days
+            <input type="number" min="1" max="3650" step="1" id="retention-async-days" value="7">
+          </label>
+          <div class="mini-actions">
+            <button type="button" id="retention-save" class="secondary-action">Save Retention</button>
+          </div>
+        </div>
+        <p id="retention-status" class="ops-note">Retention settings loaded.</p>
+      </article>
+    </section>
 
     <p id="percent" role="status"></p>
     <p id="progressbar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></p>
@@ -199,6 +385,25 @@
   <script type="module" src="dezoomers/wmts.js"></script>
   <script type="module" src="dezoomers/pnav.js"></script>
   <script type="text/javascript" src="dezoomers/generic.js"></script>
+  <script type="text/javascript" src="ui/runtime-utils.js"></script>
+  <script type="text/javascript" src="ui/storage-utils.js"></script>
+  <script type="text/javascript" src="ui/http-client.js"></script>
+  <script type="text/javascript" src="ui/limits-panel.js"></script>
+  <script type="text/javascript" src="ui/metrics-panel.js"></script>
+  <script type="text/javascript" src="ui/retention-controls.js"></script>
+  <script type="text/javascript" src="ui/history-panel.js"></script>
+  <script type="text/javascript" src="ui/schedule-panel.js"></script>
+  <script type="text/javascript" src="ui/async-queue.js"></script>
+  <script type="text/javascript" src="ui/operations-runtime.js"></script>
+  <script type="text/javascript" src="ui/bootstrap-runtime.js"></script>
+  <script type="text/javascript" src="ui/bootstrap-bridge.js"></script>
+  <script type="text/javascript" src="ui/jobs-panels-runtime.js"></script>
+  <script type="text/javascript" src="ui/jobs-orchestrator.js"></script>
+  <script type="text/javascript" src="ui/jobs-sync-controller.js"></script>
+  <script type="text/javascript" src="ui/api-key-controls.js"></script>
+  <script type="text/javascript" src="ui/service-sync-runtime.js"></script>
+  <script type="text/javascript" src="ui/startup-sequencer.js"></script>
+  <script type="text/javascript" src="ui/app-runtime.js"></script>
   <script type="text/javascript" src="browser-init.js"></script>
 
 </body>

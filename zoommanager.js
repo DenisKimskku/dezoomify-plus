@@ -47,11 +47,19 @@ Sets the width and height of the canvas
 UI.setupRendering = function (data) {
 	document.body.className = "loading";
 	document.getElementById("error").setAttribute("hidden", true);
+	var useWorkerRenderer =
+		(typeof ZoomManager !== "undefined") &&
+		ZoomManager.status &&
+		ZoomManager.status.useWorkerRenderer;
 	var area = data.width * data.height;
 	for (var maxArea = UI.MAX_CANVAS_AREA; maxArea > 8; maxArea /= 2) {
 		UI.ratio = Math.min(Math.sqrt(maxArea / area), 1);
 		UI.canvas.width = data.width * UI.ratio;
 		UI.canvas.height = data.height * UI.ratio;
+		if (useWorkerRenderer) {
+			UI.ctx = null;
+			break;
+		}
 		UI.ctx = UI.canvas.getContext("2d");
 		try {
 			UI.ctx.getImageData(0, 0, 1, 1); // Tests whether the canvas was successfully allocated
@@ -70,6 +78,7 @@ Draw a tile on the canvas, at the given position.
 @param {Number} y position
 */
 UI.drawTile = function (tileImg, x, y) {
+	if (!UI.ctx || typeof UI.ctx.drawImage !== "function") return;
 	var r = UI.ratio, w = tileImg.width, h = tileImg.height;
 	UI.ctx.drawImage(tileImg,
 		Math.floor(x * r),
@@ -153,17 +162,52 @@ UI.loadEnd = function () {
 	a.href = "#";
 	a.textContent = "Converting image...";
 	a.className = "button";
+
+	function finishWithBlob(blob) {
+		if (!(blob instanceof Blob)) {
+			console.error("Unable to access the canvas image data, got an unexpected value", blob);
+			status.className = "finished";
+			return;
+		}
+		var url = URL.createObjectURL(blob);
+		a.href = url;
+		a.textContent = "Save image";
+	}
+
+	function exportUsingCanvas() {
+		UI.canvas.toBlob(function (blob) {
+			finishWithBlob(blob);
+		}, "image/jpeg", 0.95);
+	}
+
 	try {
 		// Try to export the image
-		UI.canvas.toBlob(function (blob) {
-			if (!(blob instanceof Blob)) {
-				console.error("Unable to access the canvas image data, got an unexpected value", blob);
-				status.className = "finished";
-			}
-			var url = URL.createObjectURL(blob);
-			a.href = url;
-			a.textContent = "Save image";
-		}, "image/jpeg", 0.95);
+		var exportedByWorker = false;
+		if (
+			typeof ZoomManager !== "undefined" &&
+			typeof ZoomManager.requestRenderedBlob === "function" &&
+			typeof ZoomManager.isWorkerRendererActive === "function" &&
+			ZoomManager.isWorkerRendererActive()
+		) {
+			exportedByWorker = ZoomManager.requestRenderedBlob(
+				"image/jpeg",
+				0.95,
+				function (blob) {
+					if (blob instanceof Blob) {
+						finishWithBlob(blob);
+						return;
+					}
+					try {
+						exportUsingCanvas();
+					} catch (_) {
+						status.className = "finished";
+					}
+				}
+			);
+		}
+		if (!exportedByWorker) {
+			exportUsingCanvas();
+		}
 		document.body.className = "download";
 		status.appendChild(a);
 	} catch (e) {
@@ -228,6 +272,391 @@ ZoomManager.updateProgress = function (progress, msg) {
 ZoomManager.loadEnd = function () {
 	UI.loadEnd();
 }
+ZoomManager.onRateLimitInfo = null;
+ZoomManager.lastRateLimitInfo = null;
+
+ZoomManager.setRateLimitInfo = function (info) {
+	ZoomManager.lastRateLimitInfo = info;
+	if (typeof ZoomManager.onRateLimitInfo === "function") {
+		ZoomManager.onRateLimitInfo(info);
+	}
+};
+
+ZoomManager.updateRateLimitFromXHR = function (xhr) {
+	if (!xhr || typeof xhr.getResponseHeader !== "function") return;
+	var limit = parseInt(xhr.getResponseHeader("X-RateLimit-Limit"), 10);
+	var remaining = parseInt(xhr.getResponseHeader("X-RateLimit-Remaining"), 10);
+	var reset = parseInt(xhr.getResponseHeader("X-RateLimit-Reset"), 10);
+	var retryAfter = parseInt(xhr.getResponseHeader("Retry-After"), 10);
+	var quotaMinuteLimit = parseInt(xhr.getResponseHeader("X-Quota-Minute-Limit"), 10);
+	var quotaMinuteUsed = parseInt(xhr.getResponseHeader("X-Quota-Minute-Used"), 10);
+	var quotaMinuteReset = parseInt(xhr.getResponseHeader("X-Quota-Minute-Reset"), 10);
+	var quotaDailyLimit = parseInt(xhr.getResponseHeader("X-Quota-Daily-Limit"), 10);
+	var quotaDailyUsed = parseInt(xhr.getResponseHeader("X-Quota-Daily-Used"), 10);
+	var quotaDailyReset = parseInt(xhr.getResponseHeader("X-Quota-Daily-Reset"), 10);
+	var quotaIdentity = xhr.getResponseHeader("X-Quota-Identity");
+	var quotaBackend = xhr.getResponseHeader("X-Quota-Backend");
+
+	if (
+		!isFinite(limit) &&
+		!isFinite(remaining) &&
+		!isFinite(quotaMinuteLimit) &&
+		!isFinite(quotaDailyLimit)
+	) return;
+
+	ZoomManager.setRateLimitInfo({
+		limit: isFinite(limit) ? limit : null,
+		remaining: isFinite(remaining) ? remaining : null,
+		resetEpochSeconds: isFinite(reset) ? reset : null,
+		retryAfterSeconds: isFinite(retryAfter) ? retryAfter : 0,
+		quotaMinuteLimit: isFinite(quotaMinuteLimit) ? quotaMinuteLimit : null,
+		quotaMinuteUsed: isFinite(quotaMinuteUsed) ? quotaMinuteUsed : null,
+		quotaMinuteResetEpochSeconds: isFinite(quotaMinuteReset) ? quotaMinuteReset : null,
+		quotaDailyLimit: isFinite(quotaDailyLimit) ? quotaDailyLimit : null,
+		quotaDailyUsed: isFinite(quotaDailyUsed) ? quotaDailyUsed : null,
+		quotaDailyResetEpochSeconds: isFinite(quotaDailyReset) ? quotaDailyReset : null,
+		quotaIdentity: quotaIdentity || null,
+		quotaBackend: quotaBackend || null
+	});
+};
+
+ZoomManager.DEFAULT_TILE_CONCURRENCY = 12;
+ZoomManager.MIN_TILE_CONCURRENCY = 2;
+ZoomManager.MAX_TILE_CONCURRENCY = 20;
+ZoomManager.TILE_RETRY_LIMIT = 5;
+ZoomManager.BACKOFF_BASE_MS = 250;
+ZoomManager.BACKOFF_CAP_MS = 5000;
+ZoomManager.PREFER_DIRECT_TILE_FETCH = true;
+ZoomManager.ENABLE_WORKER_RENDERING = true;
+ZoomManager.WORKER_SCRIPT_URL = "render-worker.js";
+ZoomManager.WORKER_TILE_TIMEOUT_MS = 25000;
+ZoomManager.WORKER_READY_TIMEOUT_MS = 1500;
+ZoomManager.workerRenderer = null;
+
+ZoomManager.getWorkerRenderQueryOverride = function () {
+	if (typeof window === "undefined" || !window.location) return null;
+	var search = "";
+	if (typeof window.location.search === "string" && window.location.search.length > 0) {
+		search = window.location.search;
+	} else if (typeof window.location.href === "string") {
+		var queryStart = window.location.href.indexOf("?");
+		if (queryStart >= 0) search = window.location.href.slice(queryStart);
+	}
+	if (!search || typeof URLSearchParams === "undefined") return null;
+	try {
+		var params = new URLSearchParams(search);
+		var rawValue =
+			params.get("worker_render") ||
+			params.get("offscreen") ||
+			params.get("worker");
+		if (!rawValue) return null;
+		rawValue = String(rawValue).toLowerCase().trim();
+		if (rawValue === "0" || rawValue === "false" || rawValue === "no") return false;
+		if (rawValue === "1" || rawValue === "true" || rawValue === "yes") return true;
+	} catch (_) { }
+	return null;
+};
+
+ZoomManager.supportsWorkerRendering = function () {
+	if (!ZoomManager.ENABLE_WORKER_RENDERING) return false;
+	if (typeof Worker === "undefined") return false;
+	if (typeof OffscreenCanvas === "undefined") return false;
+	if (typeof createImageBitmap === "undefined") return false;
+	if (!UI.canvas || typeof UI.canvas.transferControlToOffscreen !== "function") return false;
+	return true;
+};
+
+ZoomManager.shouldUseWorkerRendering = function () {
+	var override = ZoomManager.getWorkerRenderQueryOverride();
+	if (override === false) return false;
+	if (!ZoomManager.supportsWorkerRendering()) return false;
+	return true;
+};
+
+ZoomManager.ensureMainCanvasContext = function () {
+	if (UI.ctx && typeof UI.ctx.drawImage === "function") return true;
+	try {
+		UI.ctx = UI.canvas.getContext("2d");
+		if (!UI.ctx) return false;
+		UI.ctx.getImageData(0, 0, 1, 1);
+		return true;
+	} catch (_) {
+		return false;
+	}
+};
+
+ZoomManager.terminateWorkerRenderer = function (silent) {
+	var state = ZoomManager.workerRenderer;
+	if (!state) return;
+
+	if (state.pendingTiles) {
+		Object.keys(state.pendingTiles).forEach(function (id) {
+			var pending = state.pendingTiles[id];
+			if (!pending) return;
+			clearTimeout(pending.timer);
+			if (!silent && typeof pending.done === "function") {
+				pending.done(new Error("worker_renderer_terminated"));
+			}
+		});
+	}
+
+	if (state.pendingExports) {
+		Object.keys(state.pendingExports).forEach(function (id) {
+			var pending = state.pendingExports[id];
+			if (!pending) return;
+			clearTimeout(pending.timer);
+			if (!silent && typeof pending.done === "function") {
+				pending.done(null, new Error("worker_renderer_terminated"));
+			}
+		});
+	}
+
+	try {
+		if (state.worker) state.worker.terminate();
+	} catch (_) { }
+	ZoomManager.workerRenderer = null;
+};
+
+ZoomManager.handleWorkerRendererFailure = function (errorMessage) {
+	ZoomManager.terminateWorkerRenderer(true);
+	if (ZoomManager.status) {
+		ZoomManager.status.useWorkerRenderer = false;
+	}
+	if (ZoomManager.ensureMainCanvasContext()) return;
+	var fallbackMessage = errorMessage ||
+		"The off-main-thread renderer failed. Reload with ?worker_render=0 to disable worker mode.";
+	ZoomManager.error(fallbackMessage);
+};
+
+ZoomManager.handleWorkerRendererMessage = function (event) {
+	var msg = event && event.data ? event.data : {};
+	var state = ZoomManager.workerRenderer;
+	if (!state || !state.active) return;
+
+	if (msg.type === "init") {
+		if (msg.ok) {
+			state.ready = true;
+			return;
+		}
+		ZoomManager.handleWorkerRendererFailure(
+			msg.error ||
+			"The off-main-thread renderer failed to initialize. Reload with ?worker_render=0."
+		);
+		return;
+	}
+
+	if (msg.type === "tileResult") {
+		var pendingTile = state.pendingTiles && state.pendingTiles[msg.id];
+		if (!pendingTile) return;
+		delete state.pendingTiles[msg.id];
+		clearTimeout(pendingTile.timer);
+		if (msg.ok) pendingTile.done(null);
+		else pendingTile.done(new Error(msg.error || "tile_draw_failed"));
+		return;
+	}
+
+	if (msg.type === "exportResult") {
+		var pendingExport = state.pendingExports && state.pendingExports[msg.id];
+		if (!pendingExport) return;
+		delete state.pendingExports[msg.id];
+		clearTimeout(pendingExport.timer);
+
+		if (!msg.ok) {
+			pendingExport.done(null, new Error(msg.error || "export_failed"));
+			return;
+		}
+		if (typeof Blob === "undefined" || !msg.buffer) {
+			pendingExport.done(null, new Error("blob_unavailable"));
+			return;
+		}
+		try {
+			var blob = new Blob([msg.buffer], { type: msg.mimeType || "image/jpeg" });
+			pendingExport.done(blob, null);
+		} catch (error) {
+			pendingExport.done(null, error);
+		}
+	}
+};
+
+ZoomManager.initWorkerRenderer = function (data) {
+	if (!ZoomManager.status || !ZoomManager.status.useWorkerRenderer) return false;
+	ZoomManager.terminateWorkerRenderer(true);
+
+	var worker = null;
+	try {
+		worker = new Worker(ZoomManager.WORKER_SCRIPT_URL);
+	} catch (_) {
+		ZoomManager.status.useWorkerRenderer = false;
+		return false;
+	}
+
+	var offscreenCanvas = null;
+	try {
+		offscreenCanvas = UI.canvas.transferControlToOffscreen();
+	} catch (_) {
+		worker.terminate();
+		ZoomManager.status.useWorkerRenderer = false;
+		return false;
+	}
+
+	ZoomManager.workerRenderer = {
+		worker: worker,
+		active: true,
+		ready: false,
+		nextMessageId: 1,
+		pendingTiles: {},
+		pendingExports: {}
+	};
+
+	worker.onmessage = ZoomManager.handleWorkerRendererMessage;
+	worker.onerror = function () {
+		ZoomManager.handleWorkerRendererFailure(
+			"The off-main-thread renderer crashed. Reload with ?worker_render=0."
+		);
+	};
+
+	worker.postMessage(
+		{
+			type: "init",
+			canvas: offscreenCanvas,
+			ratio: UI.ratio,
+			width: UI.canvas.width,
+			height: UI.canvas.height
+		},
+		[offscreenCanvas]
+	);
+	return true;
+};
+
+ZoomManager.isWorkerRendererActive = function () {
+	var state = ZoomManager.workerRenderer;
+	return !!(state && state.active && ZoomManager.status && ZoomManager.status.useWorkerRenderer);
+};
+
+ZoomManager.renderTileViaWorker = function (requestUrl, x, y, done, waitedMs) {
+	var state = ZoomManager.workerRenderer;
+	if (!state || !state.active || !ZoomManager.status || !ZoomManager.status.useWorkerRenderer) {
+		done(new Error("worker_renderer_unavailable"));
+		return;
+	}
+
+	var waited = waitedMs || 0;
+	if (!state.ready) {
+		if (waited >= ZoomManager.WORKER_READY_TIMEOUT_MS) {
+			done(new Error("worker_renderer_not_ready"));
+			return;
+		}
+		setTimeout(function () {
+			ZoomManager.renderTileViaWorker(requestUrl, x, y, done, waited + 25);
+		}, 25);
+		return;
+	}
+
+	var messageId = state.nextMessageId++;
+	var timer = setTimeout(function () {
+		if (!state.pendingTiles[messageId]) return;
+		var pending = state.pendingTiles[messageId];
+		delete state.pendingTiles[messageId];
+		pending.done(new Error("worker_tile_timeout"));
+	}, ZoomManager.WORKER_TILE_TIMEOUT_MS);
+
+	state.pendingTiles[messageId] = {
+		timer: timer,
+		done: done
+	};
+
+	try {
+		state.worker.postMessage({
+			type: "draw",
+			id: messageId,
+			url: requestUrl,
+			x: x,
+			y: y
+		});
+	} catch (error) {
+		clearTimeout(timer);
+		delete state.pendingTiles[messageId];
+		done(error);
+	}
+};
+
+ZoomManager.requestRenderedBlob = function (mimeType, quality, callback) {
+	var state = ZoomManager.workerRenderer;
+	if (!state || !state.active || !state.ready) return false;
+
+	var messageId = state.nextMessageId++;
+	var timer = setTimeout(function () {
+		if (!state.pendingExports[messageId]) return;
+		var pending = state.pendingExports[messageId];
+		delete state.pendingExports[messageId];
+		pending.done(null, new Error("worker_export_timeout"));
+	}, ZoomManager.WORKER_TILE_TIMEOUT_MS);
+
+	state.pendingExports[messageId] = {
+		timer: timer,
+		done: callback
+	};
+
+	try {
+		state.worker.postMessage({
+			type: "export",
+			id: messageId,
+			mimeType: mimeType || "image/jpeg",
+			quality: isFinite(quality) ? quality : 0.95
+		});
+		return true;
+	} catch (_) {
+		clearTimeout(timer);
+		delete state.pendingExports[messageId];
+		return false;
+	}
+};
+
+ZoomManager.recordTileFailure = function () {
+	var status = ZoomManager.status;
+	status.tileConsecutiveSuccesses = 0;
+	status.tileConsecutiveFailures++;
+	if (status.dynamicConcurrency > ZoomManager.MIN_TILE_CONCURRENCY) {
+		status.dynamicConcurrency--;
+	}
+
+	var failureExponent = Math.min(status.tileConsecutiveFailures - 1, 6);
+	var delay = ZoomManager.BACKOFF_BASE_MS * Math.pow(2, failureExponent);
+	delay = Math.min(delay, ZoomManager.BACKOFF_CAP_MS);
+	// Add jitter so retries don't happen in lockstep.
+	delay *= 0.75 + 0.5 * Math.random();
+	status.backoffUntil = Math.max(status.backoffUntil, Date.now() + delay);
+};
+
+ZoomManager.recordTileSuccess = function () {
+	var status = ZoomManager.status;
+	status.tileConsecutiveFailures = 0;
+	status.tileConsecutiveSuccesses++;
+	if (
+		status.tileConsecutiveSuccesses >= 20 &&
+		status.dynamicConcurrency < ZoomManager.MAX_TILE_CONCURRENCY
+	) {
+		status.dynamicConcurrency++;
+		status.tileConsecutiveSuccesses = 0;
+	}
+};
+
+ZoomManager.getRetryDelay = function (ntries) {
+	var retryDelay = Math.pow(2, ntries) * 100 * (0.75 + 0.5 * Math.random());
+	var globalDelay = Math.max(0, ZoomManager.status.backoffUntil - Date.now());
+	return Math.max(retryDelay, globalDelay);
+};
+
+ZoomManager.getProxyTileURL = function (url) {
+	var proxied = ZoomManager.proxy_tiles + "?url=" + encodeURIComponent(url);
+	if (ZoomManager.cookies.length > 0) {
+		proxied += "&cookies=" + encodeURIComponent(ZoomManager.cookies);
+	}
+	if (ZoomManager.api_key) {
+		proxied += "&api_key=" + encodeURIComponent(ZoomManager.api_key);
+	}
+	return proxied;
+};
 
 /**
 Start listening for tile loads
@@ -242,7 +671,19 @@ ZoomManager.startTimer = function () {
 		var loaded = ZoomManager.status.loaded, total = ZoomManager.status.totalTiles;
 		if (loaded !== wasLoaded) {
 			// Update progress if new tiles were loaded
-			ZoomManager.updateProgress(100 * loaded / total, "Loading the tiles...");
+			var inFlight = ZoomManager.status.activeTiles || 0;
+			var parallelism = ZoomManager.status.dynamicConcurrency || 1;
+			var elapsedMs = Date.now() - ZoomManager.status.startedAt;
+			var elapsedSeconds = elapsedMs > 0 ? elapsedMs / 1000 : 0;
+			var tilesPerSecond = elapsedSeconds > 0 ? (loaded / elapsedSeconds) : 0;
+			var remainingTiles = Math.max(total - loaded, 0);
+			var etaSeconds =
+				tilesPerSecond > 0 ? Math.ceil(remainingTiles / tilesPerSecond) : 0;
+			ZoomManager.updateProgress(
+				100 * loaded / total,
+				"Loading the tiles... (" + inFlight + "/" + parallelism + " active, " +
+				tilesPerSecond.toFixed(1) + " tiles/s, ETA " + etaSeconds + "s)"
+			);
 			wasLoaded = loaded;
 		}
 		if (loaded >= total) {
@@ -271,8 +712,16 @@ ZoomManager.readyToRender = function (data) {
 	data.overlap = data.overlap || 0;
 
 	ZoomManager.status.totalTiles = data.totalTiles;
+	ZoomManager.status.useWorkerRenderer = ZoomManager.shouldUseWorkerRendering();
 	ZoomManager.data = data;
 	UI.setupRendering(data);
+	if (ZoomManager.status.useWorkerRenderer) {
+		var workerReady = ZoomManager.initWorkerRenderer(data);
+		if (!workerReady) {
+			ZoomManager.status.useWorkerRenderer = false;
+			ZoomManager.ensureMainCanvasContext();
+		}
+	}
 
 	ZoomManager.updateProgress(0, "Preparing tiles load...");
 	ZoomManager.startTimer();
@@ -284,35 +733,80 @@ ZoomManager.readyToRender = function (data) {
 ZoomManager.defaultRender = function (data) {
 	var zoom = data.maxZoomLevel || ZoomManager.findMaxZoom(data);
 	var x = 0, y = 0;
+	var pumpTimer = null;
 
-	function addTile(url, x, y, data) {
-		if (typeof url === "string") {
-			if (data.origin) url = ZoomManager.resolveRelative(url, data.origin);
-			ZoomManager.addTile(url, x * data.tileSize - data.overlap, y * data.tileSize - data.overlap);
-		} else { // Promise
-			url.then(function (url) {
-				addTile(url, x, y, data)
-			}).catch(ZoomManager.error.bind(ZoomManager));
-		}
-	}
-
-	function nextTile() {
-		var url = ZoomManager.dezoomer.getTileURL(x, y, zoom, data);
-		if (typeof Promise !== "undefined") {
-			var x0 = x, y0 = y;
-			Promise.resolve(url)
-				.then(function (url) { addTile(url, x0, y0, data) })
-				.catch(ZoomManager.error);
-		} else {
-			addTile(url, x, y, data);
-		}
-
+	function nextTileCoordinates() {
+		if (y >= data.nbrTilesY) return null;
+		var coords = { x: x, y: y };
 		x++;
-		if (x >= data.nbrTilesX) { x = 0; y++; }
-		if (y < data.nbrTilesY) ZoomManager.nextTick(nextTile);
+		if (x >= data.nbrTilesX) {
+			x = 0;
+			y++;
+		}
+		return coords;
 	}
 
-	nextTile();
+	function schedulePump(waitMs) {
+		if (pumpTimer || ZoomManager.status.error) return;
+		pumpTimer = setTimeout(function () {
+			pumpTimer = null;
+			pump();
+		}, waitMs || 0);
+	}
+
+	function tileDone() {
+		ZoomManager.status.activeTiles = Math.max(0, ZoomManager.status.activeTiles - 1);
+		schedulePump(0);
+	}
+
+	function dispatchTile(coords) {
+		ZoomManager.status.activeTiles++;
+
+		function renderTile(resolvedUrl) {
+			if (data.origin) resolvedUrl = ZoomManager.resolveRelative(resolvedUrl, data.origin);
+			ZoomManager.addTile(
+				resolvedUrl,
+				coords.x * data.tileSize - data.overlap,
+				coords.y * data.tileSize - data.overlap,
+				0,
+				tileDone,
+				function () {
+					tileDone();
+				}
+			);
+		}
+
+		var tileUrl = ZoomManager.dezoomer.getTileURL(coords.x, coords.y, zoom, data);
+		if (typeof Promise !== "undefined") {
+			Promise.resolve(tileUrl)
+				.then(renderTile)
+				.catch(function (error) {
+					tileDone();
+					ZoomManager.error(error);
+				});
+		} else {
+			renderTile(tileUrl);
+		}
+	}
+
+	function pump() {
+		if (ZoomManager.status.error) return;
+
+		var waitForBackoff = Math.max(0, ZoomManager.status.backoffUntil - Date.now());
+		if (waitForBackoff > 0) {
+			schedulePump(waitForBackoff);
+			return;
+		}
+
+		var targetConcurrency = ZoomManager.status.dynamicConcurrency;
+		while (ZoomManager.status.activeTiles < targetConcurrency) {
+			var coords = nextTileCoordinates();
+			if (!coords) break;
+			dispatchTile(coords);
+		}
+	}
+
+	pump();
 };
 
 ZoomManager.MAX_REQUESTS_PER_SECOND = 5;
@@ -335,34 +829,93 @@ Request a tile from the server
 @param {Number} [n=0] - Number of time the tile has already been requested
 */
 ZoomManager.addTile = function addTile(url, x, y, ntries) {
+	var onLoaded = arguments[4];
+	var onFailed = arguments[5];
+	var transportState = arguments[6] || {};
+	var useProxy =
+		!!ZoomManager.proxy_tiles &&
+		(transportState.forceProxy || !ZoomManager.PREFER_DIRECT_TILE_FETCH);
+	var requestUrl = useProxy ? ZoomManager.getProxyTileURL(url) : url;
 	//Request a tile from the server and display it once it loaded
 	ntries = ntries | 0; // Number of time the tile has already been requested
-	var img = new Image;
-	img.addEventListener("load", function () {
-		UI.drawTile(img, x, y);
+
+	function markSuccess() {
+		ZoomManager.recordTileSuccess();
 		ZoomManager.status.loaded++;
-	});
-	img.addEventListener("error", function (evt) {
-		if (ntries < 5) {
+		if (typeof onLoaded === "function") onLoaded();
+	}
+
+	function markFailure(evt) {
+		ZoomManager.recordTileFailure();
+		if (
+			ZoomManager.proxy_tiles &&
+			!useProxy &&
+			ZoomManager.PREFER_DIRECT_TILE_FETCH &&
+			!transportState.proxyFallbackTried
+		) {
+			// If direct loading fails, retry through the proxy before consuming a retry attempt.
+			var fallbackDelay = ZoomManager.getRetryDelay(ntries);
+			setTimeout(
+				addTile,
+				fallbackDelay,
+				url,
+				x,
+				y,
+				ntries,
+				onLoaded,
+				onFailed,
+				{ forceProxy: true, proxyFallbackTried: true }
+			);
+			return;
+		}
+
+		if (ntries < ZoomManager.TILE_RETRY_LIMIT) {
 			// Maybe the server is just busy right now, or we are running on a bad connection
-			nextTime = Math.pow(10 * Math.random(), ntries);
-			setTimeout(addTile, nextTime, url, x, y, ntries + 1);
+			var nextTime = ZoomManager.getRetryDelay(ntries);
+			setTimeout(
+				addTile,
+				nextTime,
+				url,
+				x,
+				y,
+				ntries + 1,
+				onLoaded,
+				onFailed,
+				useProxy ? { forceProxy: true, proxyFallbackTried: true } : transportState
+			);
 		} else {
+			if (typeof onFailed === "function") onFailed(url);
 			ZoomManager.error("Unable to load tile.\n" +
 				"Check that your internet connection is working " +
 				"and that you can access this url:\n" + url);
 		}
+	}
+
+	if (ZoomManager.isWorkerRendererActive()) {
+		ZoomManager.renderTileViaWorker(requestUrl, x, y, function (workerError) {
+			if (workerError) {
+				markFailure(workerError);
+				return;
+			}
+			markSuccess();
+		});
+		return;
+	}
+
+	var img = new Image;
+	img.addEventListener("load", function () {
+		UI.drawTile(img, x, y);
+		markSuccess();
 	});
-	if (ZoomManager.proxy_tiles) {
-		url = ZoomManager.proxy_tiles + "?url=" + encodeURIComponent(url);
-		if (ZoomManager.cookies.length > 0) {
-			url += "&cookies=" + encodeURIComponent(ZoomManager.cookies);
-		}
+	img.addEventListener("error", function (evt) {
+		markFailure(evt);
+	});
+	if (useProxy || (ZoomManager.proxy_tiles && ZoomManager.PREFER_DIRECT_TILE_FETCH)) {
 		img.crossOrigin = "anonymous";
 	}
 	// Don't tell the tile host the request comes from dezoomify
 	img.referrerPolicy = "no-referrer";
-	img.src = url;
+	img.src = requestUrl;
 };
 
 /**
@@ -411,6 +964,9 @@ ZoomManager.getFile = function (url, params, callback) {
 	if (ZoomManager.cookies.length > 0) {
 		requesturl += "&cookies=" + encodeURIComponent(ZoomManager.cookies);
 	}
+	if (ZoomManager.api_key) {
+		requesturl += "&api_key=" + encodeURIComponent(ZoomManager.api_key);
+	}
 
 	function onerror(error_msg) {
 		if (params.error_callback) params.error_callback(error_msg);
@@ -430,6 +986,7 @@ ZoomManager.getFile = function (url, params, callback) {
 	};
 	xhr.onload = function () {
 		var response = xhr.response;
+		ZoomManager.updateRateLimitFromXHR(xhr);
 
 		/// If the proxy failed to make the request
 		if (xhr.status === 500) {
@@ -446,10 +1003,14 @@ ZoomManager.getFile = function (url, params, callback) {
 			}
 			return onerror(msg);
 		} else if (xhr.status === 429) {
-			var msg = "Our server has received too many requests, and our provider is blocking new requests. " +
-				"You can donate on https://github.com/sponsors/lovasoa to participate to the hosting fees. " +
-				"Once we collect over 5$/month overall, we will switch to a paid plan of the provider, allowing more requests to go through every day. " +
-				"For more details, see https://github.com/lovasoa/dezoomify/issues/337#issuecomment-773498488.";
+			var retryAfter = xhr.getResponseHeader("Retry-After");
+			var msg =
+				(typeof response === "string" && response.trim().length > 0) ?
+					response :
+					"The proxy is rate-limited right now. Please wait and try again.";
+			if (retryAfter) {
+				msg += "\nRetry after " + retryAfter + " seconds.";
+			}
 			return onerror(msg);
 		}
 
@@ -583,12 +1144,29 @@ Initialize the ZoomManager
 */
 ZoomManager.init = function () {
 	// Called before open()
+	ZoomManager.terminateWorkerRenderer(true);
+	var preferredConcurrency = parseInt(ZoomManager.PREFERRED_TILE_CONCURRENCY, 10);
+	if (!isFinite(preferredConcurrency)) {
+		preferredConcurrency = ZoomManager.DEFAULT_TILE_CONCURRENCY;
+	}
+	preferredConcurrency = Math.max(
+		ZoomManager.MIN_TILE_CONCURRENCY,
+		Math.min(preferredConcurrency, ZoomManager.MAX_TILE_CONCURRENCY)
+	);
 	if (!ZoomManager.cookies) ZoomManager.cookies = "";
+	if (typeof ZoomManager.api_key !== "string") ZoomManager.api_key = "";
 	if (!ZoomManager.proxy_url) ZoomManager.proxy_url = "proxy.php";
 	ZoomManager.status = {
 		"error": false,
 		"loaded": 0,
-		"totalTiles": 1
+		"totalTiles": 1,
+		"activeTiles": 0,
+		"dynamicConcurrency": preferredConcurrency,
+		"tileConsecutiveFailures": 0,
+		"tileConsecutiveSuccesses": 0,
+		"backoffUntil": 0,
+		"startedAt": Date.now(),
+		"useWorkerRenderer": false
 	};
 	UI.reset();
 };

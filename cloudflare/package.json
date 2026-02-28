@@ -1,19 +1,23 @@
 {
   "name": "dezoomify-cloudflare-worker",
-  "version": "0.0.1",
-  "description": "A simple CORS proxy",
-  "main": "cloudflare-worker-proxy.js",
+  "version": "0.1.0",
+  "description": "Dezoomify Cloudflare Worker proxy",
+  "main": "worker/script.js",
   "scripts": {
-    "start": "wrangler dev",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "wrangler dev --config wrangler.toml",
+    "deploy": "wrangler deploy --config wrangler.toml",
+    "check": "wrangler deploy --dry-run --config wrangler.toml"
   },
   "keywords": [
     "cf",
     "worker"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "GPL-2.0-or-later",
   "devDependencies": {
-    "@cloudflare/wrangler": "^1.20.0"
+    "wrangler": "^3.83.0"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

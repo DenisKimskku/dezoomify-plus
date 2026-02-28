@@ -13,7 +13,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/lovasoa/dezoomify"
+    "url": "https://github.com/DenisKimskku/dezoomify-plus.git"
   },
   "keywords": [
     "dezoomify",
@@ -23,9 +23,12 @@
     "download"
   ],
   "author": "Ophir LOJKINE",
-  "license": "GPL-2.0",
+  "license": "GPL-2.0-or-later",
   "bugs": {
-    "url": "https://github.com/lovasoa/dezoomify/issues"
+    "url": "https://github.com/DenisKimskku/dezoomify-plus/issues"
   },
-  "homepage": "https://github.com/lovasoa/dezoomify"
+  "homepage": "https://github.com/DenisKimskku/dezoomify-plus",
+  "engines": {
+    "node": ">=18"
+  }
 }

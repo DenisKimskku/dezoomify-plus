@@ -1,6 +1,3 @@
-# This workflow will do a clean install of node dependencies, build the source code and run tests across different versions of node
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-nodejs-with-github-actions
-
 name: CI
 
 on:
@@ -8,21 +5,139 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
+  workflow_dispatch:
   schedule:
-    # * is a special character in YAML so you have to quote this string
     - cron:  '0 0 1 * *'
 
 jobs:
-  build:
+  jobs-unit:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18.x, 20.x]
     steps:
-    - uses: actions/checkout@v2
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
-      with:
-        node-version: ${{ matrix.node-version }}
-    - run: >
-       php -S 127.0.0.1:8181 &
-       cd tests &&
-       npm ci &&
-       npm test
+      - uses: actions/checkout@v4
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Syntax checks
+        run: |
+          node --check api/proxy.js
+          node --check api/jobs.js
+          node --check api/cron.js
+          node --check api/metrics.js
+          node --check api/benchmarks.js
+          node --check api/submit.js
+          node --check api/status.js
+          node --check api/download.js
+          node --check api/list.js
+          node --check api/history.js
+          node --check api/retry.js
+          node --check api/retry-bulk.js
+          node --check api/remove-bulk.js
+          node --check api/cancel.js
+          node --check lib/jobs-service.js
+          node --check lib/benchmark-trends.js
+          node --check lib/async-service.js
+          node --check lib/observability.js
+          node --check browser-init.js
+          node --check ui/limits-panel.js
+          node --check ui/metrics-panel.js
+          node --check ui/retention-controls.js
+          node --check ui/history-panel.js
+          node --check ui/schedule-panel.js
+          node --check ui/async-queue.js
+          node --check ui/runtime-utils.js
+          node --check ui/storage-utils.js
+          node --check ui/http-client.js
+          node --check ui/operations-runtime.js
+          node --check ui/bootstrap-runtime.js
+          node --check ui/bootstrap-bridge.js
+          node --check ui/jobs-panels-runtime.js
+          node --check ui/jobs-orchestrator.js
+          node --check ui/jobs-sync-controller.js
+          node --check ui/api-key-controls.js
+          node --check ui/service-sync-runtime.js
+          node --check ui/startup-sequencer.js
+          node --check ui/app-runtime.js
+          node --check tests/frontend-smoke.test.js
+          node --check tests/history-handler.test.js
+          node --check tests/async-ui-perf.test.js
+          node --check tests/bench-async-endpoints.js
+          node --check render-worker.js
+          node --check dezoomers/iiif.js
+      - name: Run deterministic jobs tests
+        run: node tests/jobs-service.test.js
+      - name: Run deterministic proxy tests
+        run: node tests/proxy-handler.test.js
+      - name: Run deterministic async service tests
+        run: node tests/async-service.test.js
+      - name: Run deterministic async handler tests
+        run: node tests/async-handlers.test.js
+      - name: Run deterministic history handler tests
+        run: node tests/history-handler.test.js
+      - name: Run deterministic cron tests
+        run: node tests/cron-handler.test.js
+      - name: Run deterministic metrics tests
+        run: node tests/metrics-handler.test.js
+      - name: Run deterministic benchmark API tests
+        run: node tests/benchmarks-handler.test.js
+      - name: Run deterministic observability tests
+        run: node tests/observability-alerts.test.js
+      - name: Run deterministic IIIF tests
+        run: node tests/iiif-fastpath.test.js
+      - name: Run deterministic zoommanager queue tests
+        run: node tests/zoommanager-queue.test.js
+      - name: Run deterministic frontend smoke tests
+        run: node tests/frontend-smoke.test.js
+      - name: Run deterministic async UI perf check
+        env:
+          ASYNC_UI_MAX_REFRESH_MS: "1800"
+        run: node tests/async-ui-perf.test.js
+      - name: Benchmark guardrail (jobs state)
+        env:
+          BENCH_MAX_PER_JOB_MS: "5"
+          BENCH_MAX_DURATION_MS: "2500"
+          BENCH_OUTPUT_FILE: bench-jobs-${{ matrix.node-version }}.json
+        run: node tests/bench-jobs-state.js 120 120
+      - name: Benchmark guardrail (async endpoints)
+        env:
+          BENCH_ASYNC_MAX_LIST_MS: "280"
+          BENCH_ASYNC_MAX_STATUS_MS: "420"
+        run: node tests/bench-async-endpoints.js
+      - name: Publish benchmark artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-jobs-${{ matrix.node-version }}-${{ github.run_id }}
+          path: bench-jobs-${{ matrix.node-version }}.json
+          if-no-files-found: error
+      - name: Persist benchmark trend (optional)
+        env:
+          BENCHMARK_TREND_ENDPOINT: ${{ secrets.BENCHMARK_TREND_ENDPOINT }}
+          BENCHMARK_WRITE_TOKEN: ${{ secrets.BENCHMARK_WRITE_TOKEN }}
+          BENCHMARK_SUITE: jobs-state
+        run: node tests/publish-bench-trend.js bench-jobs-${{ matrix.node-version }}.json
+      - name: Append benchmark summary
+        run: |
+          echo "### jobs benchmark (${{ matrix.node-version }})" >> $GITHUB_STEP_SUMMARY
+          cat bench-jobs-${{ matrix.node-version }}.json >> $GITHUB_STEP_SUMMARY
+
+  browser-integration:
+    runs-on: ubuntu-latest
+    needs: jobs-unit
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+      - name: Run browser integration tests
+        run: |
+          php -S 127.0.0.1:8181 &
+          cd tests
+          npm ci
+          npm test

@@ -1,0 +1,15 @@
+{
+  "cleanUrls": false,
+  "crons": [
+    {
+      "path": "/api/cron",
+      "schedule": "*/5 * * * *"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/proxy.php",
+      "destination": "/api/proxy"
+    }
+  ]
+}
