@@ -987,14 +987,47 @@ ZoomManager.getFile = function (url, params, callback) {
 	xhr.onload = function () {
 		var response = xhr.response;
 		ZoomManager.updateRateLimitFromXHR(xhr);
+		var responseText =
+			typeof response === "string" ? response :
+				(response instanceof ArrayBuffer) ? new TextDecoder("utf-8").decode(response) :
+					"";
+
+		// Some Vercel deployments can serve proxy.php as static source.
+		// When that happens, transparently retry with /api/proxy.
+		if (
+			xhr.status >= 200 &&
+			xhr.status < 300 &&
+			/(^|\/)proxy\.php$/i.test(PHPSCRIPT) &&
+			!params._proxy_runtime_fallback_tried &&
+			typeof responseText === "string" &&
+			/^\s*<\?php\b/.test(responseText)
+		) {
+			ZoomManager.proxy_url = "/api/proxy";
+			return ZoomManager.getFile(
+				url,
+				Object.assign({}, params, { _proxy_runtime_fallback_tried: true }),
+				callback
+			);
+		}
+
+		// Legacy self-hosted setups might not expose /api/proxy.
+		// Retry once with proxy.php in that case.
+		if (
+			xhr.status === 404 &&
+			/(^|\/)api\/proxy$/i.test(PHPSCRIPT) &&
+			!params._proxy_runtime_fallback_tried
+		) {
+			ZoomManager.proxy_url = "proxy.php";
+			return ZoomManager.getFile(
+				url,
+				Object.assign({}, params, { _proxy_runtime_fallback_tried: true }),
+				callback
+			);
+		}
 
 		/// If the proxy failed to make the request
 		if (xhr.status === 500) {
 			var msg = "Unable to fetch " + url;
-			var responseText =
-				typeof response === "string" ? response :
-					(response instanceof ArrayBuffer) ? new TextDecoder("utf-8").decode(response) :
-						"";
 			if (responseText) {
 				msg += "\nThe server responded:\n" + responseText;
 				if (responseText.match(/403 forbidden/i)) {
@@ -1012,6 +1045,16 @@ ZoomManager.getFile = function (url, params, callback) {
 				msg += "\nRetry after " + retryAfter + " seconds.";
 			}
 			return onerror(msg);
+		} else if (xhr.status >= 400) {
+			var generic = "Unable to fetch " + url + "\nThe server responded:\nHTTP " + xhr.status;
+			if (responseText) {
+				var maxErrorLength = 2000;
+				generic += "\n" + responseText.slice(0, maxErrorLength);
+				if (responseText.length > maxErrorLength) {
+					generic += "\n...";
+				}
+			}
+			return onerror(generic);
 		}
 
 		var cookie = xhr.getResponseHeader("X-Set-Cookie");
@@ -1155,7 +1198,10 @@ ZoomManager.init = function () {
 	);
 	if (!ZoomManager.cookies) ZoomManager.cookies = "";
 	if (typeof ZoomManager.api_key !== "string") ZoomManager.api_key = "";
-	if (!ZoomManager.proxy_url) ZoomManager.proxy_url = "proxy.php";
+	if (!ZoomManager.proxy_url) {
+		var isFileProtocol = window.location && window.location.protocol === "file:";
+		ZoomManager.proxy_url = isFileProtocol ? "proxy.php" : "/api/proxy";
+	}
 	ZoomManager.status = {
 		"error": false,
 		"loaded": 0,

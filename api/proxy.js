@@ -497,6 +497,7 @@ async function fetchWithRedirects(rawTargetURL, cookieHeader) {
       headers: {
         "User-Agent": USER_AGENT,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Encoding": "identity",
         "Accept-Language": "en-US,en;q=0.5",
         "Referer": validatedURL.toString(),
         "Origin": validatedURL.origin,
@@ -593,6 +594,30 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  const body = Buffer.from(await upstreamResponse.arrayBuffer());
+  if (upstreamResponse.status >= 200 && upstreamResponse.status < 300 && body.length === 0) {
+    sendError(
+      res,
+      502,
+      "Upstream returned an empty response.",
+      ipRateLimitInfo,
+      null,
+      quotaInfo
+    );
+    let targetHostForEmpty = "";
+    try {
+      targetHostForEmpty = new URL(rawTargetURL).hostname || "";
+    } catch (_) { }
+    finish(502, {
+      reason: "upstream_empty_response",
+      targetHost: targetHostForEmpty || undefined,
+      quotaIdentity: quotaInfo.identity,
+      quotaBackend: quotaInfo.backend,
+      ipRemaining: ipRateLimitInfo.remaining,
+    });
+    return;
+  }
+
   addCorsHeaders(res);
   applyRateLimitHeaders(res, ipRateLimitInfo);
   applyQuotaHeaders(res, quotaInfo);
@@ -613,7 +638,6 @@ module.exports = async function handler(req, res) {
     res.setHeader("X-Set-Cookie", cookiePair);
   }
 
-  const body = Buffer.from(await upstreamResponse.arrayBuffer());
   res.end(body);
   let targetHost = "";
   try {
