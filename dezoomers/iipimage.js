@@ -22,14 +22,27 @@ var iipimage = (function(){
           }
           // Special support for nationalgallery.org.uk
           if (baseUrl.match(/nationalgallery\.org\.uk\/paintings/)){
-            var image = JSON.parse(text.match(/image\s*:\s*("[^"]*")/)[1]);
+            var imageMatch = text.match(/image\s*:\s*("[^"]*")/);
+            if (!imageMatch || imageMatch.length < 2) {
+              throw new Error("Unable to locate National Gallery image metadata.");
+            }
+            var image;
+            try {
+              image = JSON.parse(imageMatch[1]);
+            } catch (_) {
+              throw new Error("Invalid National Gallery image metadata.");
+            }
             return callback('/server.iip/fcgi-bin/iipsrv.fcgi?FIF=' + image);
           }
           throw new Error("No IIPImage-related URL found.");
       });
     },
     "open" : function (url) {
-      var baseUrl = url.match(/^.*\?FIF=[^&]*/)[0];
+      var baseUrlMatch = url.match(/^.*\?FIF=[^&]*/);
+      if (!baseUrlMatch || !baseUrlMatch[0]) {
+        throw new Error("Invalid IIPImage URL.");
+      }
+      var baseUrl = baseUrlMatch[0];
       var infoUrl = baseUrl + "&OBJ=Max-size&OBJ=Tile-size&OBJ=Resolution-number";
       ZoomManager.getFile(infoUrl, {type:"text"}, function (text, xhr) {
         var sizeMatch = text.match(/Max-size:(\d+) (\d+)/);
@@ -41,11 +54,14 @@ var iipimage = (function(){
         }
         var data = {
           "origin": baseUrl,
-          "width" : parseInt(sizeMatch[1]),
-          "height" : parseInt(sizeMatch[2]),
-          "tileSize" : parseInt(tileSizeMatch[1]),
-          "maxZoomLevel" : parseInt(zoomMatch[1])-1
+          "width" : parseInt(sizeMatch[1], 10),
+          "height" : parseInt(sizeMatch[2], 10),
+          "tileSize" : parseInt(tileSizeMatch[1], 10),
+          "maxZoomLevel" : zoomMatch && zoomMatch[1] ? (parseInt(zoomMatch[1], 10) - 1) : 0
         };
+        if (!isFinite(data.maxZoomLevel) || data.maxZoomLevel < 0) {
+          data.maxZoomLevel = 0;
+        }
         ZoomManager.readyToRender(data);
       });
     },

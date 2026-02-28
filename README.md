@@ -165,6 +165,33 @@ cd tests
 npm run test:iiif
 ```
 
+### Deterministic IIPImage parser tests
+
+IIPImage page parsing edge-cases (including National Gallery metadata parsing) are covered by deterministic tests:
+
+```bash
+cd tests
+npm run test:iipimage
+```
+
+### Live compatibility matrices
+
+Live-site compatibility can be checked in two modes:
+
+1. **Canary (strict, maintained list)**: small curated set in `tests/canary_urls.js`.
+2. **Legacy telemetry (non-blocking)**: larger historical set in `tests/test_urls.js`.
+
+```bash
+cd tests
+npm run test:live:canary
+npm run test:live:legacy
+```
+
+Both commands generate:
+
+- JSON results (status, buckets, per-dezoomer counts)
+- Markdown summary (`*.md`) for CI job summary and artifacts.
+
 ### Deterministic queue/backoff tests
 
 Tile queue/adaptive backoff logic (including worker-render fallback behavior) in `zoommanager.js` is covered by deterministic tests:

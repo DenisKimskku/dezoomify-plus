@@ -64,6 +64,8 @@ jobs:
           node --check ui/startup-sequencer.js
           node --check ui/app-runtime.js
           node --check tests/frontend-smoke.test.js
+          node --check tests/iipimage-parser.test.js
+          node --check tests/live-site-matrix.js
           node --check tests/history-handler.test.js
           node --check tests/async-ui-perf.test.js
           node --check tests/bench-async-endpoints.js
@@ -91,6 +93,8 @@ jobs:
         run: node tests/observability-alerts.test.js
       - name: Run deterministic IIIF tests
         run: node tests/iiif-fastpath.test.js
+      - name: Run deterministic IIPImage parser tests
+        run: node tests/iipimage-parser.test.js
       - name: Run deterministic zoommanager queue tests
         run: node tests/zoommanager-queue.test.js
       - name: Run deterministic frontend smoke tests
@@ -153,3 +157,65 @@ jobs:
           export FIREFOX_BIN="$FIREFOX_BIN_PATH"
           echo "Using FIREFOX_BIN=$FIREFOX_BIN"
           npm test
+
+  live-compatibility:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: browser-integration
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+      - name: Setup Firefox
+        uses: browser-actions/setup-firefox@v1
+      - name: Install test dependencies
+        run: |
+          cd tests
+          npm ci
+      - name: Run live canary matrix (strict)
+        run: |
+          cd tests
+          FIREFOX_BIN_PATH="$(which firefox || true)"
+          if [ -z "$FIREFOX_BIN_PATH" ]; then
+            echo "Firefox binary was not found on PATH"
+            exit 1
+          fi
+          export FIREFOX_BIN="$FIREFOX_BIN_PATH"
+          npm run test:live:canary
+      - name: Run legacy live telemetry matrix (non-blocking)
+        continue-on-error: true
+        run: |
+          cd tests
+          FIREFOX_BIN_PATH="$(which firefox || true)"
+          if [ -z "$FIREFOX_BIN_PATH" ]; then
+            echo "Firefox binary was not found on PATH"
+            exit 1
+          fi
+          export FIREFOX_BIN="$FIREFOX_BIN_PATH"
+          npm run test:live:legacy
+      - name: Upload live compatibility artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-compatibility-${{ github.run_id }}
+          path: |
+            tests/canary-matrix-results.json
+            tests/canary-matrix-results.md
+            tests/legacy-matrix-results.json
+            tests/legacy-matrix-results.md
+          if-no-files-found: warn
+      - name: Append live compatibility summary
+        if: always()
+        run: |
+          if [ -f tests/canary-matrix-results.md ]; then
+            echo "### Live canary matrix (strict)" >> $GITHUB_STEP_SUMMARY
+            cat tests/canary-matrix-results.md >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f tests/legacy-matrix-results.md ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Legacy live telemetry (non-blocking)" >> $GITHUB_STEP_SUMMARY
+            cat tests/legacy-matrix-results.md >> $GITHUB_STEP_SUMMARY
+          fi
