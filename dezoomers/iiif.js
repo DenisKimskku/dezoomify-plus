@@ -12,6 +12,9 @@ var iiif = (function () {
   );
   var gallicaReg = /https?:\/\/gallica\.bnf\.fr\/ark:\/(\w+\/\w+)(?:\/(f\w+))?/
   var polonaReg = /https?:\/\/polona\.pl\/item\/(\d+)(?:\/(\d+))?/i;
+  var manifestParamReg = /[?&#]manifest=([^&#]+)/i;
+  var blManifestReg = /https?:\/\/bl\.digirati\.io\/(?:iiif|manifests)\/ark:\/[^"'\\\s<>]+/i;
+  var genericManifestReg = /https?:\/\/[^"'\\\s<>]+manifest(?:\.json)?(?:\?[^"'\\\s<>]*)?/i;
   function extractUrl(text) {
     var match = text.match(urlReg);
     if (!match) return null;
@@ -19,6 +22,34 @@ var iiif = (function () {
     // Van Gogh Museum has hash-protected URLs on micrio.* but not micrio-cdn.* 
     result = result.replace('micrio.vangoghmuseum.nl/iiif', 'micrio-cdn.vangoghmuseum.nl');
     return result;
+  }
+  function sanitizeURLMatch(raw) {
+    if (!raw) return "";
+    return String(raw).replace(/[\\\])}>.,;:!?]+$/, "");
+  }
+  function extractManifestURL(text) {
+    if (!text) return null;
+    var manifestParamMatch = String(text).match(manifestParamReg);
+    if (manifestParamMatch && manifestParamMatch[1]) {
+      try {
+        return decodeURIComponent(manifestParamMatch[1]);
+      } catch (_) {
+        return manifestParamMatch[1];
+      }
+    }
+    var blMatch = String(text).match(blManifestReg);
+    if (blMatch && blMatch[0]) return sanitizeURLMatch(blMatch[0]);
+    var genericMatch = String(text).match(genericManifestReg);
+    if (genericMatch && genericMatch[0]) return sanitizeURLMatch(genericMatch[0]);
+    return null;
+  }
+  function looksLikePresentationManifestURL(url) {
+    if (!url) return false;
+    var lower = String(url).toLowerCase();
+    if (lower.indexOf("/info.json") >= 0) return false;
+    if (manifestParamReg.test(lower)) return true;
+    if (lower.indexOf("/iiif/ark:/") >= 0) return true;
+    return /manifest(?:\.json)?(?:$|[?#])/.test(lower);
   }
   return {
     "name": "IIIF",
@@ -47,10 +78,16 @@ var iiif = (function () {
 
       var url = extractUrl(baseUrl);
       if (url) return callback(url);
+      var manifestURL = extractManifestURL(baseUrl);
+      if (manifestURL || looksLikePresentationManifestURL(baseUrl)) {
+        return resolveManifestToInfo(manifestURL || baseUrl, callback);
+      }
 
       ZoomManager.getFile(baseUrl, { type: "htmltext" }, function (text) {
         var url = extractUrl(text);
         if (url) return callback(url);
+        var manifestURL = extractManifestURL(text);
+        if (manifestURL) return resolveManifestToInfo(manifestURL, callback);
         throw new Error("No IIIF URL found.");
       });
     },
@@ -172,6 +209,71 @@ var iiif = (function () {
         callback(manifest);
       });
     });
+  }
+
+  function resolveManifestToInfo(manifestURL, callback) {
+    ZoomManager.getFile(manifestURL, { type: "json" }, function (manifest) {
+      var imageService = findImageServiceFromManifest(manifest);
+      if (!imageService) {
+        throw new Error("Unable to locate IIIF image service in manifest.");
+      }
+      imageService = String(imageService).replace(/\/+$/, "");
+      callback(imageService + "/info.json");
+    });
+  }
+
+  function findImageServiceFromManifest(manifest) {
+    // IIIF v3 canonical path
+    var canvas = manifest && manifest.items && manifest.items[0];
+    var annoPage = canvas && canvas.items && canvas.items[0];
+    var anno = annoPage && annoPage.items && annoPage.items[0];
+    var body = anno && anno.body;
+    var service = readServiceID(body && body.service);
+    if (service) return service;
+
+    // IIIF v2 canonical path
+    var sequence = manifest && manifest.sequences && manifest.sequences[0];
+    var v2Canvas = sequence && sequence.canvases && sequence.canvases[0];
+    var image = v2Canvas && v2Canvas.images && v2Canvas.images[0];
+    var resource = image && image.resource;
+    service = readServiceID(resource && resource.service);
+    if (service) return service;
+
+    // Fallback for non-canonical manifests.
+    return findNestedService(manifest, 0);
+  }
+
+  function readServiceID(serviceNode) {
+    if (!serviceNode) return null;
+    if (typeof serviceNode === "string") return serviceNode;
+    if (Array.isArray(serviceNode)) {
+      for (var i = 0; i < serviceNode.length; i++) {
+        var nested = readServiceID(serviceNode[i]);
+        if (nested) return nested;
+      }
+      return null;
+    }
+    return serviceNode["@id"] || serviceNode.id || null;
+  }
+
+  function findNestedService(node, depth) {
+    if (!node || depth > 8) return null;
+    if (Array.isArray(node)) {
+      for (var i = 0; i < node.length; i++) {
+        var nested = findNestedService(node[i], depth + 1);
+        if (nested) return nested;
+      }
+      return null;
+    }
+    if (typeof node !== "object") return null;
+    var direct = readServiceID(node.service);
+    if (direct) return direct;
+    for (var key in node) {
+      if (!Object.prototype.hasOwnProperty.call(node, key)) continue;
+      var nested = findNestedService(node[key], depth + 1);
+      if (nested) return nested;
+    }
+    return null;
   }
 
   function isReliableTileMetadata(rawData, tiles, parsedData) {

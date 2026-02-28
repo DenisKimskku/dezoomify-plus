@@ -24,9 +24,40 @@ var seadragon = (function () { //Code isolation
 
 			// British Library
 			if (baseUrl.indexOf("bl.uk/manuscripts/Viewer.aspx") > -1) {
-				return callback(baseUrl
+				var legacyProxyURL = baseUrl
 					.replace("Viewer.aspx", "Proxy.ashx")
-					.replace(/ref=([^&]*)/, "view=$1.xml"));
+					.replace(/ref=([^&]*)/, "view=$1.xml");
+				var decidedBritishLibraryURL = false;
+				function resolveBritishLibraryURL(url) {
+					if (decidedBritishLibraryURL) return;
+					decidedBritishLibraryURL = true;
+					callback(url);
+				}
+				return ZoomManager.getFile(
+					baseUrl,
+					{
+						type: "htmltext",
+						allow_failure: true,
+						error_callback: function () {
+							resolveBritishLibraryURL(legacyProxyURL);
+						}
+					},
+					function (text) {
+						var manifestMatch = text.match(/https?:\/\/bl\.digirati\.io\/(?:iiif|manifests)\/ark:\/[^"'\\\s<>]+/i);
+						if (manifestMatch && manifestMatch[0]) {
+							return resolveBritishLibraryURL(manifestMatch[0]);
+						}
+						var paramMatch = text.match(/[?&#]manifest=([^&#]+)/i);
+						if (paramMatch && paramMatch[1]) {
+							try {
+								return resolveBritishLibraryURL(decodeURIComponent(paramMatch[1]));
+							} catch (_) {
+								return resolveBritishLibraryURL(paramMatch[1]);
+							}
+						}
+						return resolveBritishLibraryURL(legacyProxyURL);
+					}
+				);
 			}
 
 			// bibliothèques specialisées de la ville de Paris
@@ -91,6 +122,13 @@ var seadragon = (function () { //Code isolation
 			});
 		},
 		"open": function (url) {
+			if (url.match(/\/iiif\/ark:\//i) || url.match(/manifest(?:\.json)?(?:$|[?#])/i) || url.match(/\/info\.json(?:$|[?#])/i)) {
+				var iiifDezoomer = ZoomManager.dezoomersList && ZoomManager.dezoomersList["IIIF"];
+				if (iiifDezoomer) {
+					ZoomManager.setDezoomer(iiifDezoomer);
+					return ZoomManager.open(url);
+				}
+			}
 			ZoomManager.getFile(url, { type: "xml" }, function (xml, xhr) {
 				var infos = xml.getElementsByTagName("Image")[0];
 				var size = xml.getElementsByTagName("Size")[0];

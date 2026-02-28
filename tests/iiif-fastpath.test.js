@@ -182,6 +182,83 @@ var tests = [
     assert.strictEqual(harness.getFileCalls[0].url, idURL);
     assert.strictEqual(harness.getFileCalls[1].url, contentsURL);
   }),
+
+  test("IIIF findFile resolves presentation manifest URLs to image info.json", async function () {
+    var manifestURL = "https://bl.digirati.io/iiif/ark:/81055/vdc_100104060212.0x000001";
+    var imageService = "https://bl.digirati.io/images/ark:/81055/vdc_100104060214.0x000001";
+    var harness = loadIIIFDezoomer({
+      manifest: {},
+      getFileMap: {
+        [manifestURL]: {
+          "@context": "http://iiif.io/api/presentation/3/context.json",
+          type: "Manifest",
+          items: [
+            {
+              items: [
+                {
+                  items: [
+                    {
+                      body: {
+                        service: [{ id: imageService }],
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+
+    var found = null;
+    harness.dezoomer.findFile(manifestURL, function (url) {
+      found = url;
+    });
+
+    assert.strictEqual(found, imageService + "/info.json");
+    assert.strictEqual(harness.getFileCalls.length, 1);
+    assert.strictEqual(harness.getFileCalls[0].url, manifestURL);
+  }),
+
+  test("IIIF findFile resolves uv manifest query URLs", async function () {
+    var manifestURL = "https://bl.digirati.io/iiif/ark:/81055/vdc_100104060212.0x000001";
+    var imageService = "https://bl.digirati.io/images/ark:/81055/vdc_100104060214.0x000001";
+    var harness = loadIIIFDezoomer({
+      manifest: {},
+      getFileMap: {
+        [manifestURL]: {
+          items: [
+            {
+              items: [
+                {
+                  items: [
+                    {
+                      body: {
+                        service: [{ "@id": imageService }],
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+
+    var found = null;
+    harness.dezoomer.findFile(
+      "https://iiif.bl.uk/uv/#?manifest=" + encodeURIComponent(manifestURL),
+      function (url) {
+        found = url;
+      }
+    );
+
+    assert.strictEqual(found, imageService + "/info.json");
+    assert.strictEqual(harness.getFileCalls.length, 1);
+    assert.strictEqual(harness.getFileCalls[0].url, manifestURL);
+  }),
 ];
 
 async function run() {
