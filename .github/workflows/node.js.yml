@@ -135,9 +135,18 @@ jobs:
           node-version: 20.x
           cache: npm
           cache-dependency-path: tests/package-lock.json
+      - name: Setup Firefox
+        uses: browser-actions/setup-firefox@v1
       - name: Run browser integration tests
         run: |
           php -S 127.0.0.1:8181 &
           cd tests
           npm ci
+          FIREFOX_BIN_PATH="$(which firefox || true)"
+          if [ -z "$FIREFOX_BIN_PATH" ]; then
+            echo "Firefox binary was not found on PATH"
+            exit 1
+          fi
+          export FIREFOX_BIN="$FIREFOX_BIN_PATH"
+          echo "Using FIREFOX_BIN=$FIREFOX_BIN"
           npm test
