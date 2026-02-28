@@ -108,7 +108,12 @@
         title="Click to start downloading the image">
     </form>
 
-    <section id="operations">
+    <details id="operations-shell">
+      <summary id="operations-shell-summary">
+        <span class="ops-shell-title">Open Job Console</span>
+        <span class="ops-shell-subtitle">Queue, history, scheduling, metrics, and limits</span>
+      </summary>
+      <section id="operations">
       <article class="ops-card" id="limits-card">
         <h2>Service Limits</h2>
         <div class="mini-form" id="api-key-form">
@@ -281,7 +286,8 @@
         </div>
         <p id="retention-status" class="ops-note">Retention settings loaded.</p>
       </article>
-    </section>
+      </section>
+    </details>
 
     <p id="percent" role="status"></p>
     <p id="progressbar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></p>

@@ -406,11 +406,74 @@ h1 {
 	cursor: not-allowed;
 }
 
+#operations-shell {
+	margin: 0 30px 24px;
+	border: 1px solid #c6d4de;
+	border-radius: 12px;
+	background: linear-gradient(180deg, rgba(255, 252, 246, 0.96), rgba(250, 253, 255, 0.96));
+	box-shadow: var(--dz-shadow-soft);
+	overflow: hidden;
+}
+
+#operations-shell[open] {
+	padding-bottom: 18px;
+}
+
+#operations-shell > summary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	cursor: pointer;
+	padding: 14px 16px;
+	font-weight: 700;
+	color: var(--dz-accent);
+	list-style: none;
+}
+
+#operations-shell > summary::-webkit-details-marker {
+	display: none;
+}
+
+#operations-shell > summary::after {
+	content: "+";
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border-radius: 999px;
+	border: 1px solid #9fb1bf;
+	background: #fff;
+	color: #345265;
+	font-size: 1rem;
+	line-height: 1;
+	flex: 0 0 auto;
+}
+
+#operations-shell[open] > summary::after {
+	content: "−";
+}
+
+.ops-shell-title {
+	font-size: 1rem;
+	letter-spacing: 0.01em;
+}
+
+.ops-shell-subtitle {
+	display: block;
+	margin-left: auto;
+	padding-right: 6px;
+	font-size: 0.86rem;
+	font-weight: 500;
+	color: #5a6f7e;
+}
+
 #operations {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 16px;
-	padding: 0 30px 24px;
+	padding: 0 16px 0;
 	align-items: start;
 }
 
@@ -694,8 +757,8 @@ h1 {
 	#dezoomifiedImage {
 		width: min(96vw, 1100px);
 	}
-	#operations {
-		padding: 0 18px 22px;
+	#operations-shell {
+		margin: 0 18px 22px;
 	}
 	#urlform {
 		padding: 24px 18px 18px;
@@ -713,9 +776,20 @@ h1 {
 		margin-top: 8px;
 		border-radius: 10px;
 	}
+	#operations-shell {
+		margin: 0 14px 18px;
+	}
+	#operations-shell > summary {
+		flex-wrap: wrap;
+	}
+	.ops-shell-subtitle {
+		width: 100%;
+		margin-left: 0;
+		padding-right: 0;
+	}
 	#operations {
 		grid-template-columns: 1fr;
-		padding: 0 14px 18px;
+		padding: 0 14px 0;
 	}
 	#history-card {
 		grid-column: span 1;
@@ -730,7 +804,12 @@ h1 {
 	.mini-row {
 		grid-template-columns: 1fr;
 	}
-	.metrics-kpis {
-		grid-template-columns: 1fr;
-	}
+		.metrics-kpis {
+			grid-template-columns: 1fr;
+		}
+}
+
+body.loading #operations-shell,
+body.download #operations-shell {
+	display: none;
 }
