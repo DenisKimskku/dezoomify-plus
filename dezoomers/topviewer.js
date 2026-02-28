@@ -6,6 +6,7 @@ var topviewer = (function(){
 		"urls": [
 			/memorix/,
 			/rhcrijnstreek\.nl/,
+			/rkd\.nl\/en\/explore\/images\/record/,
 			/topview\.?json/,
 		],
 		"contents": [

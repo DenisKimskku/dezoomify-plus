@@ -8,7 +8,8 @@ var micrio = (function () {
     ],
     contents: [
       /data-role="micrio"/,
-      /dataSourcePath\s*:\s*".*"/
+      /dataSourcePath\s*:\s*".*"/,
+      /micrioId\s*:\s*"[^"]+"/
     ],
     findFile: function getInfoFile(baseUrl, callback) {
       if (baseUrl.match(/\/api\/getTilesInfo\?object_id=/)) return callback(baseUrl);

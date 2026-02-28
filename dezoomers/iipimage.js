@@ -22,6 +22,11 @@ var iipimage = (function(){
           }
           // Special support for nationalgallery.org.uk
           if (baseUrl.match(/nationalgallery\.org\.uk\/paintings/)){
+            var iiifMatch = text.match(/["']([^"']*server\.iip\?IIIF=[^"']+?\.tif)/i);
+            if (iiifMatch && iiifMatch[1]) {
+              var infoUrl = ZoomManager.resolveRelative(iiifMatch[1] + "/info.json", baseUrl);
+              return callback(infoUrl);
+            }
             var imageMatch = text.match(/image\s*:\s*("[^"]*")/);
             if (!imageMatch || imageMatch.length < 2) {
               throw new Error("Unable to locate National Gallery image metadata.");
@@ -38,6 +43,14 @@ var iipimage = (function(){
       });
     },
     "open" : function (url) {
+      if (url.indexOf("?IIIF=") > -1 || url.match(/\/info\.json(\?.*)?$/)) {
+        var iiifDezoomer = ZoomManager.dezoomersList && ZoomManager.dezoomersList["IIIF"];
+        if (!iiifDezoomer) {
+          throw new Error("IIIF dezoomer unavailable.");
+        }
+        ZoomManager.setDezoomer(iiifDezoomer);
+        return ZoomManager.open(url);
+      }
       var baseUrlMatch = url.match(/^.*\?FIF=[^&]*/);
       if (!baseUrlMatch || !baseUrlMatch[0]) {
         throw new Error("Invalid IIPImage URL.");

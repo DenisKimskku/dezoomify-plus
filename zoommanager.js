@@ -1060,9 +1060,22 @@ ZoomManager.getFile = function (url, params, callback) {
 		var cookie = xhr.getResponseHeader("X-Set-Cookie");
 		if (cookie) ZoomManager.cookies += cookie;
 		// Custom error message on invalid XML
-		if (type === "xml" &&
-			(response === null || response.documentElement.tagName === "parsererror")) {
-			return onerror("Invalid XML:\n" + url);
+		if (type === "xml") {
+			var hasParserError =
+				(response === null) ||
+				(response.documentElement && response.documentElement.tagName === "parsererror");
+			if (hasParserError && typeof responseText === "string" && responseText.trim().length > 0) {
+				try {
+					var reparsed = new DOMParser().parseFromString(responseText, "application/xml");
+					if (reparsed && reparsed.documentElement && reparsed.documentElement.tagName !== "parsererror") {
+						response = reparsed;
+						hasParserError = false;
+					}
+				} catch (_) { }
+			}
+			if (hasParserError) {
+				return onerror("Invalid XML:\n" + url);
+			}
 		}
 		// Custom error message on invalid JSON
 		if (type === "json" && xhr.response === null) {

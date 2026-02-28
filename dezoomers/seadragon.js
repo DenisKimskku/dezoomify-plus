@@ -5,7 +5,6 @@ var seadragon = (function () { //Code isolation
 		"description": "Microsoft zoomable image format, sometimes called DZI, seadragon, or deep zoom",
 		"urls": [
 			/bl\.uk\/manuscripts\/Viewer\.aspx/,
-			/polona\.pl\/item\//,
 			/bibliotheques-specialisees\.paris\.fr\/ark/,
 			/nla\.gov\.au\/nla\.obj.*\/view$/,
 			/_files\/\d+\/\d+_\d+.jpg$/,
@@ -40,17 +39,6 @@ var seadragon = (function () { //Code isolation
 					"&selectedTab=otherdocs";
 			}
 
-			// Polona.pl
-			var polonaMatch = baseUrl.match(/polona.pl\/item\/(\d+)\/(\d+)/);
-			if (polonaMatch) {
-				var itemId = polonaMatch[1], pageId = parseInt(polonaMatch[2]);
-				var resUrl = "http://polona.pl/resources/item/" + itemId + "/?format=json";
-				ZoomManager.getFile(resUrl, { type: "json" }, function (res, xhr) {
-					callback(res.pages[pageId].dzi_url);
-				});
-				return;
-			}
-
 			// national library of australia
 			if (baseUrl.match(/nla\.gov\.au\/nla\.obj.*\/view$/)) {
 				return callback(baseUrl.replace(/view\/?$/, "dzi"));
@@ -72,7 +60,7 @@ var seadragon = (function () { //Code isolation
 				}
 				return possibilities.forEach(function (url) {
 					ZoomManager.getFile(url, { type: "xml", allow_failure: true, error_callback: error_callback }, function (xml) {
-						if (!decided_xml_dzi && xml.getElementsByTagName("Image")) {
+						if (!decided_xml_dzi && xml && xml.getElementsByTagName("Image").length > 0) {
 							decided_xml_dzi = true;
 							callback(url);
 						}

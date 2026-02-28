@@ -4,13 +4,14 @@ var iiif = (function () {
     "(https?://[^\"'\\s]+)" + // base
     "(?:/info\\.json|" +
     "/\\^?(?:full|square|(?:pct:)?\\d+,\\d+,\\d+,\\d+)" + // region
-    "/(?:full|max|\\d+,|,\\d+|pct:\\d+|!?\\d+,\\d+)" + // size
+    "/\\^?(?:full|max|\\d+,|,\\d+|pct:\\d+|!?\\d+,\\d+)" + // size
     "/!?[1-3]?[0-9]?[0-9]" + // rotation
     "/(?:color|gray|bitonal|default|native)" + // quality
     "\\.(?:jpe?g|tiff?|png|gif|jp2|pdf|webp)" + // format
     ")"
   );
   var gallicaReg = /https?:\/\/gallica\.bnf\.fr\/ark:\/(\w+\/\w+)(?:\/(f\w+))?/
+  var polonaReg = /https?:\/\/polona\.pl\/item\/(\d+)(?:\/(\d+))?/i;
   function extractUrl(text) {
     var match = text.match(urlReg);
     if (!match) return null;
@@ -22,7 +23,7 @@ var iiif = (function () {
   return {
     "name": "IIIF",
     "description": "International Image Interoperability Framework",
-    "urls": [urlReg, gallicaReg],
+    "urls": [urlReg, gallicaReg, polonaReg],
     "contents": [urlReg],
     "findFile": function getInfoFile(baseUrl, callback) {
 
@@ -32,6 +33,16 @@ var iiif = (function () {
           gallicaMatch[1] + '/' +
           (gallicaMatch[2] || 'f1') +
           '/info.json';
+      }
+
+      var polonaMatch = baseUrl.match(polonaReg);
+      if (polonaMatch) {
+        var polonaItemId = polonaMatch[1];
+        var polonaPageIndex = parseInt(polonaMatch[2], 10);
+        if (!isFinite(polonaPageIndex) || polonaPageIndex < 0) {
+          polonaPageIndex = 0;
+        }
+        return resolvePolonaManifest(polonaItemId, polonaPageIndex, callback);
       }
 
       var url = extractUrl(baseUrl);
@@ -137,6 +148,30 @@ var iiif = (function () {
       "0" + "/" + //rotation
       data.quality + "." + //quality
       data.format; //format
+  }
+
+  function resolvePolonaManifest(itemId, pageIndex, callback) {
+    var idUrl = "https://polona.pl/api/library-object-query/digital-objects/new-id/" + encodeURIComponent(itemId);
+    ZoomManager.getFile(idUrl, { type: "json" }, function (newId) {
+      if (!newId || typeof newId !== "string") {
+        throw new Error("Unable to resolve Polona object id.");
+      }
+      var contentsUrl =
+        "https://polona.pl/api/library-object-query/digital-objects/" +
+        encodeURIComponent(newId) +
+        "/contents";
+      ZoomManager.getFile(contentsUrl, { type: "json" }, function (contents) {
+        var pages = (contents && contents.pages) || [];
+        var page = pages[pageIndex] || pages[0] || null;
+        var contentItems = (page && page.content) || [];
+        var firstItem = contentItems[0] || null;
+        var manifest = firstItem && firstItem.iiifImageAPIManifest;
+        if (!manifest) {
+          throw new Error("Unable to locate Polona IIIF manifest.");
+        }
+        callback(manifest);
+      });
+    });
   }
 
   function isReliableTileMetadata(rawData, tiles, parsedData) {

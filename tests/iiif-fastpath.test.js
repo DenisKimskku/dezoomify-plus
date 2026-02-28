@@ -59,6 +59,10 @@ function loadIIIFDezoomer(options) {
     ZoomManager: {
       getFile: function (url, params, callback) {
         getFileCalls.push({ url: url, params: params });
+        if (opts.getFileMap && Object.prototype.hasOwnProperty.call(opts.getFileMap, url)) {
+          callback(opts.getFileMap[url], {});
+          return;
+        }
         callback(opts.manifest, {});
       },
       readyToRender: function (data) {
@@ -131,6 +135,52 @@ var tests = [
     assert.strictEqual(harness.imageInstances.length, 1, "probe image should be attempted");
     assert.strictEqual(harness.errorCalls.length, 1, "probe failure should be reported");
     assert.ok(/Unable to load first tile/.test(harness.errorCalls[0]));
+  }),
+
+  test("IIIF findFile supports caret-size IIIF image URLs", async function () {
+    var harness = loadIIIFDezoomer({ manifest: {} });
+    var found = null;
+    harness.dezoomer.findFile(
+      "https://iiif.micr.io/WjxgV/full/^1024,538/0/default.webp",
+      function (url) {
+        found = url;
+      }
+    );
+    assert.strictEqual(found, "https://iiif.micr.io/WjxgV/info.json");
+    assert.strictEqual(harness.getFileCalls.length, 0, "direct IIIF URL should not require HTML fetch");
+  }),
+
+  test("IIIF findFile resolves Polona item URLs to page IIIF manifests", async function () {
+    var itemId = "9388882";
+    var newId = "522bfc2f-60a8-4548-85c9-6f41e621fc34";
+    var idURL = "https://polona.pl/api/library-object-query/digital-objects/new-id/" + itemId;
+    var contentsURL = "https://polona.pl/api/library-object-query/digital-objects/" + newId + "/contents";
+    var harness = loadIIIFDezoomer({
+      manifest: {},
+      getFileMap: {
+        [idURL]: newId,
+        [contentsURL]: {
+          pages: [
+            {
+              content: [{ iiifImageAPIManifest: "https://polona.pl/iiif/2/page-0/info.json" }],
+            },
+            {
+              content: [{ iiifImageAPIManifest: "https://polona.pl/iiif/2/page-1/info.json" }],
+            },
+          ],
+        },
+      },
+    });
+
+    var found = null;
+    harness.dezoomer.findFile("https://polona.pl/item/" + itemId + "/1/", function (url) {
+      found = url;
+    });
+
+    assert.strictEqual(found, "https://polona.pl/iiif/2/page-1/info.json");
+    assert.strictEqual(harness.getFileCalls.length, 2);
+    assert.strictEqual(harness.getFileCalls[0].url, idURL);
+    assert.strictEqual(harness.getFileCalls[1].url, contentsURL);
   }),
 ];
 
