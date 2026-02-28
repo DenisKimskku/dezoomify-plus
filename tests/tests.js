@@ -11,11 +11,11 @@ function getBrowserTestURLs() {
   return [
     {
       name: "Zoomify local fixture (ImageProperties.xml)",
-      url: "http://localhost:9876/base/tests/images/issue_81/image/ImageProperties.xml",
+      url: BASE + "/tests/images/issue_81/image/ImageProperties.xml",
     },
     {
       name: "Zoomify local fixture (tile URL)",
-      url: "http://localhost:9876/base/tests/images/issue_81/image/TileGroup0/3-1-6.jpg",
+      url: BASE + "/tests/images/issue_81/image/TileGroup0/3-1-6.jpg",
     },
   ];
 }
@@ -88,6 +88,34 @@ function installDeterministicGetFileOverride(ZoomManager, testwin) {
     }
     xhr.send(null);
   };
+}
+
+function runDeterministicFixtureFetchTest(testwin, url, assert, finish) {
+  var xhr = new testwin.XMLHttpRequest();
+  var isXML = /\.xml(?:$|\?)/i.test(url);
+  xhr.open("GET", url, true);
+  if (isXML) xhr.responseType = "document";
+  xhr.onerror = function () {
+    assert.ok(false, "Unable to fetch deterministic fixture: " + url);
+    finish();
+  };
+  xhr.onload = function () {
+    if (xhr.status >= 400 || xhr.status === 0) {
+      assert.ok(false, "Fixture request failed (" + xhr.status + "): " + url);
+      finish();
+      return;
+    }
+    if (isXML) {
+      var xml = xhr.responseXML || xhr.response;
+      var root = xml && xml.documentElement ? String(xml.documentElement.tagName || "").toLowerCase() : "";
+      assert.ok(!!root && root !== "parsererror", "Loaded fixture XML");
+      finish();
+      return;
+    }
+    assert.ok(true, "Loaded fixture asset");
+    finish();
+  };
+  xhr.send(null);
 }
 
 QUnit.module("Image loads", {
@@ -165,6 +193,12 @@ browser_test_urls.forEach(function(test) {
       clearTimeout(testTimeout);
       done();
     }
+
+    if (shouldUseDeterministicBrowserURLs()) {
+      runDeterministicFixtureFetchTest(testwin, test.url, assert, finish);
+      return;
+    }
+
     ZoomManager.reset();
     ZoomManager.open(test.url);
     ZoomManager.loadEnd = function () {
