@@ -56,6 +56,8 @@
       metricsPanelController = window.createMetricsPanelController({
         searchParams: opts.searchParams,
         endpoint: opts.metricsEndpoint || "/api/metrics",
+        personalEndpoint: opts.myMetricsEndpoint || "/api/my-metrics",
+        serviceEndpoint: opts.metricsEndpoint || "/api/metrics",
         tokenStorageKey: opts.metricsTokenStorageKey,
         trendStorageKey: opts.metricsTrendStorageKey,
         maxTrendPoints: parseInt(opts.maxTrendPoints, 10) || 100,

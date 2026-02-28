@@ -43,6 +43,8 @@
   function createMetricsPanelController(options) {
     var opts = options || {};
     var endpoint = String(opts.endpoint || "/api/metrics");
+    var serviceEndpoint = String(opts.serviceEndpoint || endpoint);
+    var personalEndpoint = String(opts.personalEndpoint || "/api/my-metrics");
     var tokenStorageKey = String(opts.tokenStorageKey || "dezoomify:metrics-token:v1");
     var trendStorageKey = String(opts.trendStorageKey || "dezoomify:metrics-trend:v1");
     var maxTrendPoints = Math.max(parseInt(opts.maxTrendPoints, 10) || 100, 2);
@@ -52,6 +54,7 @@
       tokenInput: document.getElementById("metrics-token-input"),
       tokenSaveButton: document.getElementById("metrics-token-save"),
       tokenClearButton: document.getElementById("metrics-token-clear"),
+      modeLabel: document.getElementById("metrics-mode-label"),
       refreshButton: document.getElementById("metrics-refresh"),
       autoRefreshCheckbox: document.getElementById("metrics-auto-refresh"),
       status: document.getElementById("metrics-status"),
@@ -69,14 +72,31 @@
     var metricsEnabled = true;
     var lastMetricsSnapshot = null;
     var lastTrendDelta = null;
-    var metricsTrend = loadArrayState(trendStorageKey, []);
-    var alertHistoryStorageKey = trendStorageKey + ":alerts";
-    var alertHistory = loadArrayState(alertHistoryStorageKey, []);
-    if (!Array.isArray(metricsTrend)) metricsTrend = [];
-    if (!Array.isArray(alertHistory)) alertHistory = [];
-    if (metricsTrend.length > maxTrendPoints) {
-      metricsTrend = metricsTrend.slice(metricsTrend.length - maxTrendPoints);
+    var activeMode = "service";
+    var metricsTrend = [];
+    var alertHistory = [];
+
+    function getTrendStorageKey() {
+      if (activeMode === "service") return trendStorageKey;
+      return trendStorageKey + ":" + activeMode;
     }
+
+    function getAlertHistoryStorageKey() {
+      return getTrendStorageKey() + ":alerts";
+    }
+
+    function loadModeState() {
+      metricsTrend = loadArrayState(getTrendStorageKey(), []);
+      alertHistory = loadArrayState(getAlertHistoryStorageKey(), []);
+      if (!Array.isArray(metricsTrend)) metricsTrend = [];
+      if (!Array.isArray(alertHistory)) alertHistory = [];
+      if (metricsTrend.length > maxTrendPoints) {
+        metricsTrend = metricsTrend.slice(metricsTrend.length - maxTrendPoints);
+      }
+      lastTrendDelta = null;
+    }
+
+    loadModeState();
 
     function formatDate(ts) {
       if (typeof opts.formatDate === "function") {
@@ -95,10 +115,53 @@
       refs.status.textContent = text || "";
     }
 
+    function isPersonalMode() {
+      return activeMode === "personal";
+    }
+
+    function resolveModeFromAuth(detail) {
+      var info = detail && typeof detail === "object" ? detail : {};
+      var authenticated = !!info.authenticated;
+      var role = String(info.user && info.user.role || "").toLowerCase();
+      if (authenticated && role !== "admin") return "personal";
+      return "service";
+    }
+
+    function applyModePresentation() {
+      var personal = isPersonalMode();
+      if (refs.modeLabel) {
+        refs.modeLabel.textContent = personal ? "Personal metrics" : "Service metrics";
+      }
+      if (refs.tokenInput) refs.tokenInput.hidden = personal;
+      if (refs.tokenSaveButton) refs.tokenSaveButton.hidden = personal;
+      if (refs.tokenClearButton) refs.tokenClearButton.hidden = personal;
+      if (refs.tokenInput) {
+        refs.tokenInput.placeholder = personal ? "Token not required for personal metrics" : "Optional metrics token";
+      }
+    }
+
+    function setMode(nextMode) {
+      var normalized = String(nextMode || "").trim().toLowerCase() === "personal" ? "personal" : "service";
+      if (normalized === activeMode) return false;
+      activeMode = normalized;
+      metricsEnabled = true;
+      loadModeState();
+      lastMetricsSnapshot = null;
+      renderMetricsSnapshot(null);
+      applyModePresentation();
+      return true;
+    }
+
+    function getActiveEndpoint() {
+      return isPersonalMode() ? personalEndpoint : serviceEndpoint;
+    }
+
     function getEndpointURL() {
+      var base = getActiveEndpoint();
+      if (isPersonalMode()) return base;
       var token = refs.tokenInput ? refs.tokenInput.value.trim() : "";
-      if (!token) return endpoint;
-      return endpoint + "?token=" + encodeURIComponent(token);
+      if (!token) return base;
+      return base + "?token=" + encodeURIComponent(token);
     }
 
     function formatCounterValue(value) {
@@ -231,7 +294,7 @@
           quotaDelta: Math.max(nextPoint.quotaLimited - asNumber(previous.quotaLimited, 0), 0),
         };
       }
-      saveArrayState(trendStorageKey, metricsTrend);
+      saveArrayState(getTrendStorageKey(), metricsTrend);
     }
 
     function buildSeriesFromRecentBuckets(snapshot) {
@@ -386,7 +449,7 @@
         if (alertHistory.length > 20) {
           alertHistory = alertHistory.slice(0, 20);
         }
-        saveArrayState(alertHistoryStorageKey, alertHistory);
+        saveArrayState(getAlertHistoryStorageKey(), alertHistory);
       }
       if (!alerts.length) {
         var empty = document.createElement("p");
@@ -474,6 +537,10 @@
       var counters = snapshot.counters || {};
       var rollup = normalizeMetricsRollup(snapshot);
       var lines = [];
+      lines.push("mode: " + (isPersonalMode() ? "personal" : "service"));
+      if (snapshot.scope) {
+        lines.push("scope: " + String(snapshot.scope));
+      }
       lines.push("created: " + formatDate(snapshot.createdAt));
       lines.push("updated: " + formatDate(snapshot.updatedAt));
       lines.push("total requests: " + formatCounterValue(counters["http.requests.total"] || 0));
@@ -558,7 +625,19 @@
             return false;
           }
           if (result.category === "unauthorized") {
-            setStatus("Unauthorized. Add a metrics token.");
+            if (isPersonalMode()) {
+              setStatus("Sign in to load personal metrics.");
+            } else {
+              setStatus("Unauthorized. Add a metrics token.");
+            }
+            return false;
+          }
+          if (result.status === 403) {
+            if (isPersonalMode()) {
+              setStatus(result.message || "Personal metrics are unavailable for this account.");
+            } else {
+              setStatus(result.message || "Admin role is required for service metrics.");
+            }
             return false;
           }
           if (result.category === "rate_limited" && result.retryAfterSeconds > 0) {
@@ -576,7 +655,7 @@
         }
 
         metricsEnabled = true;
-        setStatus("Metrics updated at " + formatDate(Date.now()));
+        setStatus((isPersonalMode() ? "Personal metrics" : "Service metrics") + " updated at " + formatDate(Date.now()));
         appendMetricsTrendSnapshot(payload.metrics);
         renderMetricsSnapshot(payload.metrics);
         return true;
@@ -586,6 +665,15 @@
       } finally {
         metricsFetchBusy = false;
       }
+    }
+
+    function handleAuthStateChange(event) {
+      var detail = event && event.detail ? event.detail : {};
+      var nextMode = resolveModeFromAuth(detail);
+      var changed = setMode(nextMode);
+      if (!changed) return;
+      setStatus(nextMode === "personal" ? "Loading personal metrics..." : "Loading service metrics...");
+      refresh(true);
     }
 
     function initialize() {
@@ -643,8 +731,16 @@
         });
       }
 
+      if (typeof window.addEventListener === "function") {
+        window.addEventListener("dezoomify-auth-state", handleAuthStateChange);
+      }
+
+      if (window.__dezoomifyAuthState) {
+        setMode(resolveModeFromAuth(window.__dezoomifyAuthState));
+      }
+      applyModePresentation();
       renderMetricsSnapshot(null);
-      setStatus("Waiting for metrics snapshot.");
+      setStatus(isPersonalMode() ? "Waiting for personal metrics snapshot." : "Waiting for service metrics snapshot.");
       refresh(true);
       return true;
     }

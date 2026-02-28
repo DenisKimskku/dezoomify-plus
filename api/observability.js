@@ -1,10 +1,10 @@
 "use strict";
 
 const { appendBenchmarkRun, listBenchmarkRuns } = require("../lib/benchmark-trends");
-const { createRequestObserver, getMetricsSnapshot } = require("../lib/observability");
+const { createRequestObserver, getMetricsSnapshot, metricsScopeFromOwnerId } = require("../lib/observability");
 const { checkStorageHealth } = require("../lib/storage-service");
 const authService = require("../lib/auth-service");
-const { listOwnerIds: listJobOwnerIds, loadOwnerState } = require("../lib/jobs-service");
+const { listOwnerIds: listJobOwnerIds, loadOwnerState, resolveOwnerContext } = require("../lib/jobs-service");
 const { listOwnerIds: listAsyncOwnerIds, listJobsForOwner } = require("../lib/async-service");
 
 function toSingle(value) {
@@ -25,11 +25,12 @@ function sendAuthError(res, statusCode, code, message, extras) {
 function resolveScope(req) {
   const query = req.query || {};
   const queryScope = String(toSingle(query.scope || query.route || query.endpoint || "")).trim().toLowerCase();
-  if (["metrics", "benchmarks", "auth", "storage", "admin"].indexOf(queryScope) !== -1) {
+  if (["metrics", "my_metrics", "benchmarks", "auth", "storage", "admin"].indexOf(queryScope) !== -1) {
     return queryScope;
   }
 
   const url = String((req && req.url) || "").toLowerCase();
+  if (url.indexOf("/api/my-metrics") >= 0) return "my_metrics";
   if (url.indexOf("/api/metrics") >= 0) return "metrics";
   if (url.indexOf("/api/benchmarks") >= 0) return "benchmarks";
   if (url.indexOf("/api/auth") >= 0) return "auth";
@@ -508,8 +509,52 @@ async function handleMetrics(req, res) {
   sendJSON(res, 200, {
     ok: true,
     metrics: getMetricsSnapshot(),
+    mode: "service",
   });
   return { statusCode: 200, reason: "snapshot" };
+}
+
+async function handleMyMetrics(req, res) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    sendJSON(res, 405, { ok: false, error: "Only GET requests are supported." });
+    return { statusCode: 405, reason: "method_not_allowed" };
+  }
+
+  let ownerContext = null;
+  if (authService.AUTH_ENFORCE_ADVANCED) {
+    const authResult = await requireAuthenticatedUser(req, res);
+    if (!authResult) {
+      return { statusCode: 401, reason: "unauthorized" };
+    }
+    ownerContext = authService.toOwnerContext(authResult);
+    if (!ownerContext || !ownerContext.ownerId) {
+      sendAuthError(res, 403, "FORBIDDEN", "Unable to resolve personal metrics scope.");
+      return { statusCode: 403, reason: "missing_scope" };
+    }
+  } else {
+    ownerContext = await resolveOwnerContext(req);
+    if (ownerContext && ownerContext.error) {
+      sendAuthError(
+        res,
+        ownerContext.statusCode || 401,
+        ownerContext.code || "UNAUTHORIZED",
+        ownerContext.error || "Unable to resolve identity."
+      );
+      return { statusCode: ownerContext.statusCode || 401, reason: "owner_resolution_failed" };
+    }
+  }
+
+  const ownerId = ownerContext && ownerContext.ownerId ? String(ownerContext.ownerId) : "";
+  const scopeId = metricsScopeFromOwnerId(ownerId);
+  sendJSON(res, 200, {
+    ok: true,
+    metrics: getMetricsSnapshot(scopeId),
+    mode: "personal",
+    owner: ownerContext && ownerContext.ownerLabel ? ownerContext.ownerLabel : "",
+    authType: ownerContext && ownerContext.authType ? ownerContext.authType : "",
+  });
+  return { statusCode: 200, reason: "snapshot", ownerId: ownerId || undefined, metricsScope: scopeId || undefined };
 }
 
 async function handleBenchmarks(req, res) {
@@ -576,6 +621,8 @@ module.exports = async function handler(req, res) {
   const scope = resolveScope(req);
   const metricName = scope === "metrics"
     ? "metrics"
+    : scope === "my_metrics"
+      ? "my_metrics"
     : scope === "benchmarks"
       ? "benchmarks"
       : scope === "auth"
@@ -596,6 +643,8 @@ module.exports = async function handler(req, res) {
   let result;
   if (scope === "metrics") {
     result = await handleMetrics(req, res);
+  } else if (scope === "my_metrics") {
+    result = await handleMyMetrics(req, res);
   } else if (scope === "benchmarks") {
     result = await handleBenchmarks(req, res);
   } else if (scope === "auth") {

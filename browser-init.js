@@ -15,6 +15,7 @@
     schedulerIntervalMs: 15000,
     serverJobsEndpoint: "/api/jobs",
     serverMetricsEndpoint: "/api/metrics",
+    serverMyMetricsEndpoint: "/api/my-metrics",
     serverAsyncSubmitEndpoint: "/api/submit",
     serverAsyncStatusEndpoint: "/api/status",
     serverAsyncDownloadEndpoint: "/api/download",

@@ -77,14 +77,14 @@ module.exports = async function handler(req, res) {
     payload = await readJSONBody(req);
   } catch (error) {
     sendErrorJSON(res, 400, error.message || String(error));
-    finish(400, { reason: "invalid_body" });
+    finish(400, { reason: "invalid_body", ownerId: owner.ownerId });
     return;
   }
 
   const ids = parseJobIDs(payload && typeof payload === "object" ? payload.ids : []);
   if (!ids.length) {
     sendErrorJSON(res, 400, "Missing required field: ids.");
-    finish(400, { reason: "missing_ids" });
+    finish(400, { reason: "missing_ids", ownerId: owner.ownerId });
     return;
   }
 
@@ -97,7 +97,7 @@ module.exports = async function handler(req, res) {
       });
     } catch (error) {
       sendErrorJSON(res, 500, error && error.message ? error.message : String(error));
-      finish(500, { reason: "bulk_retry_failed" });
+      finish(500, { reason: "bulk_retry_failed", ownerId: owner.ownerId });
       return;
     }
 
@@ -120,6 +120,7 @@ module.exports = async function handler(req, res) {
     finish(200, {
       reason: "bulk_retry",
       owner: owner.authType,
+      ownerId: owner.ownerId,
       requested: retried.requested,
       success: retried.successCount,
       failed: retried.failedCount,
@@ -132,7 +133,7 @@ module.exports = async function handler(req, res) {
     removed = await removeJobsForOwner(owner.ownerId, ids);
   } catch (error) {
     sendErrorJSON(res, 500, error && error.message ? error.message : String(error));
-    finish(500, { reason: "bulk_remove_failed" });
+    finish(500, { reason: "bulk_remove_failed", ownerId: owner.ownerId });
     return;
   }
 
@@ -151,6 +152,7 @@ module.exports = async function handler(req, res) {
   finish(200, {
     reason: "bulk_remove",
     owner: owner.authType,
+    ownerId: owner.ownerId,
     requested: removed.requested,
     removed: removed.removed,
     notFound: removed.notFound,

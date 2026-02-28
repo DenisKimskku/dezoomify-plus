@@ -49,7 +49,7 @@ module.exports = async function handler(req, res) {
     payload = await readJSONBody(req);
   } catch (error) {
     sendErrorJSON(res, 400, error.message || String(error));
-    finish(400, { reason: "invalid_body" });
+    finish(400, { reason: "invalid_body", ownerId: owner.ownerId });
     return;
   }
 
@@ -59,7 +59,7 @@ module.exports = async function handler(req, res) {
   const jobID = String(rawID || "").trim();
   if (!jobID) {
     sendErrorJSON(res, 400, "Missing required field: id.");
-    finish(400, { reason: "missing_id" });
+    finish(400, { reason: "missing_id", ownerId: owner.ownerId });
     return;
   }
 
@@ -71,13 +71,13 @@ module.exports = async function handler(req, res) {
     });
   } catch (error) {
     sendErrorJSON(res, 500, error && error.message ? error.message : String(error));
-    finish(500, { reason: "retry_failed" });
+    finish(500, { reason: "retry_failed", ownerId: owner.ownerId });
     return;
   }
 
   if (!retried.job) {
     sendErrorJSON(res, retried.statusCode || 404, retried.message || "Job not found.");
-    finish(retried.statusCode || 404, { reason: retried.reason || "not_found" });
+    finish(retried.statusCode || 404, { reason: retried.reason || "not_found", ownerId: owner.ownerId });
     return;
   }
 
@@ -98,5 +98,6 @@ module.exports = async function handler(req, res) {
     reason: retried.reason || "retried",
     status: retried.job.status,
     owner: owner.authType,
+    ownerId: owner.ownerId,
   });
 };

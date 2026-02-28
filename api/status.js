@@ -32,14 +32,14 @@ module.exports = async function handler(req, res) {
   const jobID = toSingle(query.id || query.job_id || "");
   if (!jobID) {
     sendErrorJSON(res, 400, "Missing required query parameter: id.");
-    finish(400, { reason: "missing_id" });
+    finish(400, { reason: "missing_id", ownerId: owner.ownerId });
     return;
   }
 
   const loaded = await getJobForOwner(owner.ownerId, jobID);
   if (!loaded.job) {
     sendErrorJSON(res, 404, "Job not found.");
-    finish(404, { reason: "not_found" });
+    finish(404, { reason: "not_found", ownerId: owner.ownerId });
     return;
   }
 
@@ -54,5 +54,5 @@ module.exports = async function handler(req, res) {
       download: "/api/download?id=" + encodedID,
     },
   });
-  finish(200, { reason: loaded.reason || "status", status: loaded.job.status });
+  finish(200, { reason: loaded.reason || "status", status: loaded.job.status, ownerId: owner.ownerId });
 };

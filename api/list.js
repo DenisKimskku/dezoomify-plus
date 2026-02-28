@@ -62,7 +62,7 @@ module.exports = async function handler(req, res) {
     });
   } catch (error) {
     sendErrorJSON(res, 500, error && error.message ? error.message : String(error));
-    finish(500, { reason: "list_failed" });
+    finish(500, { reason: "list_failed", ownerId: owner.ownerId });
     return;
   }
 
@@ -83,6 +83,7 @@ module.exports = async function handler(req, res) {
   finish(200, {
     reason: "listed",
     owner: owner.authType,
+    ownerId: owner.ownerId,
     count: listed.jobs.length,
     total: listed.total,
   });

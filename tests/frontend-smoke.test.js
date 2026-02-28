@@ -622,6 +622,7 @@ var tests = [
     assert.strictEqual(harness.calls.start, 1);
     assert.strictEqual(harness.calls.options.serverJobsEndpoint, "/api/jobs");
     assert.strictEqual(harness.calls.options.serverMetricsEndpoint, "/api/metrics");
+    assert.strictEqual(harness.calls.options.serverMyMetricsEndpoint, "/api/my-metrics");
     assert.strictEqual(harness.calls.options.maxHistoryItems, 80);
   }),
 

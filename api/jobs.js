@@ -42,6 +42,7 @@ module.exports = async function handler(req, res) {
       state: loaded.state,
     });
     finish(200, {
+      ownerId: owner.ownerId,
       authType: owner.authType,
       backend: loaded.backend,
       schedules: loaded.state && loaded.state.schedules ? loaded.state.schedules.length : 0,
@@ -53,7 +54,7 @@ module.exports = async function handler(req, res) {
   if (req.method !== "PUT") {
     res.setHeader("Allow", "GET, PUT, OPTIONS");
     sendErrorJSON(res, 405, "Only GET and PUT requests are supported.");
-    finish(405, { reason: "method_not_allowed" });
+    finish(405, { reason: "method_not_allowed", ownerId: owner.ownerId });
     return;
   }
 
@@ -62,7 +63,7 @@ module.exports = async function handler(req, res) {
     payload = await readJSONBody(req);
   } catch (error) {
     sendErrorJSON(res, 400, error.message || String(error));
-    finish(400, { reason: "invalid_body" });
+    finish(400, { reason: "invalid_body", ownerId: owner.ownerId });
     return;
   }
 
@@ -78,6 +79,7 @@ module.exports = async function handler(req, res) {
     state: saved.state,
   });
   finish(200, {
+    ownerId: owner.ownerId,
     authType: owner.authType,
     backend: saved.backend,
     schedules: saved.state && saved.state.schedules ? saved.state.schedules.length : 0,

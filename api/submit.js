@@ -74,14 +74,14 @@ module.exports = async function handler(req, res) {
     payload = await readJSONBody(req);
   } catch (error) {
     sendErrorJSON(res, 400, error.message || String(error));
-    finish(400, { reason: "invalid_body" });
+    finish(400, { reason: "invalid_body", ownerId: owner.ownerId });
     return;
   }
 
   const rawURL = payload && typeof payload === "object" ? payload.url : "";
   if (!rawURL) {
     sendErrorJSON(res, 400, "Missing required field: url.");
-    finish(400, { reason: "missing_url" });
+    finish(400, { reason: "missing_url", ownerId: owner.ownerId });
     return;
   }
 
@@ -90,7 +90,7 @@ module.exports = async function handler(req, res) {
     normalizedURL = validateTargetURL(rawURL);
   } catch (error) {
     sendErrorJSON(res, 400, error.message || String(error));
-    finish(400, { reason: "invalid_url" });
+    finish(400, { reason: "invalid_url", ownerId: owner.ownerId });
     return;
   }
 
@@ -99,7 +99,7 @@ module.exports = async function handler(req, res) {
     created = await submitJob(owner.ownerId, owner.ownerLabel, normalizedURL);
   } catch (error) {
     sendErrorJSON(res, 500, error.message || String(error));
-    finish(500, { reason: "submit_failed" });
+    finish(500, { reason: "submit_failed", ownerId: owner.ownerId });
     return;
   }
 
@@ -121,5 +121,6 @@ module.exports = async function handler(req, res) {
     reason: processNow ? "submitted_processed" : "submitted",
     status: job.status,
     owner: owner.authType,
+    ownerId: owner.ownerId,
   });
 };

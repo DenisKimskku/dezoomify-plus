@@ -37,14 +37,14 @@ module.exports = async function handler(req, res) {
     body = await readJSONBody(req);
   } catch (error) {
     sendErrorJSON(res, 400, error.message || String(error));
-    finish(400, { reason: "invalid_body" });
+    finish(400, { reason: "invalid_body", ownerId: owner.ownerId });
     return;
   }
 
   const jobID = String((body && body.id) || "").trim();
   if (!jobID) {
     sendErrorJSON(res, 400, "Missing required field: id.");
-    finish(400, { reason: "missing_id" });
+    finish(400, { reason: "missing_id", ownerId: owner.ownerId });
     return;
   }
 
@@ -53,13 +53,16 @@ module.exports = async function handler(req, res) {
     canceled = await cancelJobForOwner(owner.ownerId, jobID);
   } catch (error) {
     sendErrorJSON(res, 500, error && error.message ? error.message : String(error));
-    finish(500, { reason: "cancel_failed" });
+    finish(500, { reason: "cancel_failed", ownerId: owner.ownerId });
     return;
   }
 
   if (!canceled || !canceled.job) {
     sendErrorJSON(res, canceled && canceled.statusCode ? canceled.statusCode : 404, canceled && canceled.message ? canceled.message : "Job not found.");
-    finish(canceled && canceled.statusCode ? canceled.statusCode : 404, { reason: canceled && canceled.reason ? canceled.reason : "not_found" });
+    finish(canceled && canceled.statusCode ? canceled.statusCode : 404, {
+      reason: canceled && canceled.reason ? canceled.reason : "not_found",
+      ownerId: owner.ownerId,
+    });
     return;
   }
 
@@ -73,5 +76,6 @@ module.exports = async function handler(req, res) {
   finish(200, {
     reason: canceled.reason || "canceled",
     status: canceled.job.status,
+    ownerId: owner.ownerId,
   });
 };

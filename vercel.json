@@ -40,6 +40,10 @@
       "destination": "/api/observability?scope=metrics"
     },
     {
+      "source": "/api/my-metrics",
+      "destination": "/api/observability?scope=my_metrics"
+    },
+    {
       "source": "/api/admin",
       "destination": "/api/observability?scope=admin"
     },

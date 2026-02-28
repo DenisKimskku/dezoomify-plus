@@ -89,6 +89,7 @@
         user: state.user,
         config: state.config,
       };
+      window.__dezoomifyAuthState = detail;
 
       if (typeof window.CustomEvent === "function") {
         window.dispatchEvent(new window.CustomEvent("dezoomify-auth-state", { detail: detail }));
@@ -262,9 +263,8 @@
 
       if (refs.metricsTab) {
         if (enforce) {
-          var isAdmin = authenticated && state.user && state.user.role === "admin";
-          refs.metricsTab.disabled = !isAdmin;
-          refs.metricsTab.setAttribute("title", isAdmin ? "" : "Admin role required for service metrics.");
+          refs.metricsTab.disabled = !authenticated;
+          refs.metricsTab.setAttribute("title", authenticated ? "" : "Sign in to view personal metrics.");
         } else {
           refs.metricsTab.disabled = false;
           refs.metricsTab.setAttribute("title", "");

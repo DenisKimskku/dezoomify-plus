@@ -110,6 +110,7 @@ module.exports = async function handler(req, res) {
   });
   finish(200, {
     reason: "listed",
+    ownerId: owner.ownerId,
     count: page.length,
     total: filtered.length,
     backend: loaded.backend,

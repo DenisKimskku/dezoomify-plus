@@ -592,14 +592,14 @@ module.exports = async function handler(req, res) {
       quotaInfo.retryAfterSeconds,
       quotaInfo
     );
-    finish(429, { reason: "quota_exceeded", quotaType: quotaInfo.reason || "unknown" });
+    finish(429, { reason: "quota_exceeded", quotaType: quotaInfo.reason || "unknown", ownerId: identity.storageKey });
     return;
   }
 
   let rawTargetURL = toSingle(req.query.url);
   if (!rawTargetURL) {
     sendError(res, 400, "Missing required query parameter: url", ipRateLimitInfo, null, quotaInfo);
-    finish(400, { reason: "missing_url" });
+    finish(400, { reason: "missing_url", ownerId: identity.storageKey });
     return;
   }
 
@@ -608,7 +608,7 @@ module.exports = async function handler(req, res) {
     cookieHeader = sanitizeCookies(toSingle(req.query.cookies) || "");
   } catch (error) {
     sendError(res, 400, error.message || String(error), ipRateLimitInfo, null, quotaInfo);
-    finish(400, { reason: "invalid_cookie_header" });
+    finish(400, { reason: "invalid_cookie_header", ownerId: identity.storageKey });
     return;
   }
 
@@ -617,7 +617,7 @@ module.exports = async function handler(req, res) {
     upstreamResponse = await fetchWithRedirects(rawTargetURL, cookieHeader);
   } catch (error) {
     sendError(res, 502, error.message || String(error), ipRateLimitInfo, null, quotaInfo);
-    finish(502, { reason: "upstream_fetch_failed" });
+    finish(502, { reason: "upstream_fetch_failed", ownerId: identity.storageKey });
     return;
   }
 
@@ -641,6 +641,7 @@ module.exports = async function handler(req, res) {
       quotaIdentity: quotaInfo.identity,
       quotaBackend: quotaInfo.backend,
       ipRemaining: ipRateLimitInfo.remaining,
+      ownerId: identity.storageKey,
     });
     return;
   }
@@ -675,5 +676,6 @@ module.exports = async function handler(req, res) {
     quotaIdentity: quotaInfo.identity,
     quotaBackend: quotaInfo.backend,
     ipRemaining: ipRateLimitInfo.remaining,
+    ownerId: identity.storageKey,
   });
 };

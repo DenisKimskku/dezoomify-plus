@@ -12,6 +12,7 @@
 
     var SERVER_JOBS_ENDPOINT = String(opts.serverJobsEndpoint || "/api/jobs");
     var SERVER_METRICS_ENDPOINT = String(opts.serverMetricsEndpoint || "/api/metrics");
+    var SERVER_MY_METRICS_ENDPOINT = String(opts.serverMyMetricsEndpoint || "/api/my-metrics");
     var SERVER_ASYNC_SUBMIT_ENDPOINT = String(opts.serverAsyncSubmitEndpoint || "/api/submit");
     var SERVER_ASYNC_STATUS_ENDPOINT = String(opts.serverAsyncStatusEndpoint || "/api/status");
     var SERVER_ASYNC_DOWNLOAD_ENDPOINT = String(opts.serverAsyncDownloadEndpoint || "/api/download");
@@ -439,6 +440,7 @@
       operationsRuntime = window.createOperationsRuntime({
         searchParams: searchParams,
         metricsEndpoint: SERVER_METRICS_ENDPOINT,
+        myMetricsEndpoint: SERVER_MY_METRICS_ENDPOINT,
         metricsTokenStorageKey: METRICS_TOKEN_STORAGE_KEY,
         metricsTrendStorageKey: METRICS_TREND_STORAGE_KEY,
         maxTrendPoints: 100,
