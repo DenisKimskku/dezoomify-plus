@@ -11,16 +11,84 @@ function getBrowserTestURLs() {
   return [
     {
       name: "Zoomify local fixture (ImageProperties.xml)",
-      url: "http://127.0.0.1:8181/tests/images/issue_81/image/ImageProperties.xml",
+      url: "http://localhost:9876/base/tests/images/issue_81/image/ImageProperties.xml",
     },
     {
       name: "Zoomify local fixture (tile URL)",
-      url: "http://127.0.0.1:8181/tests/images/issue_81/image/TileGroup0/3-1-6.jpg",
+      url: "http://localhost:9876/base/tests/images/issue_81/image/TileGroup0/3-1-6.jpg",
     },
   ];
 }
 
 var browser_test_urls = getBrowserTestURLs();
+
+function installDeterministicGetFileOverride(ZoomManager, testwin) {
+  ZoomManager.getFile = function (url, params, callback) {
+    params = params || {};
+    callback = typeof callback === "function" ? callback : function () {};
+    var type = params.type || "text";
+    var xhr = new testwin.XMLHttpRequest();
+
+    function onerror(error_msg) {
+      if (typeof params.error_callback === "function") params.error_callback(error_msg);
+      if (params.allow_failure) {
+        console.log("non-fatal error:", error_msg);
+      } else {
+        ZoomManager.error(error_msg);
+      }
+    }
+
+    xhr.open("GET", url, true);
+    xhr.onerror = function () {
+      onerror("Unable to fetch " + url);
+    };
+    xhr.onload = function () {
+      if (xhr.status >= 400 || xhr.status === 0) {
+        onerror("Unable to fetch " + url + "\nThe server responded:\nHTTP " + xhr.status);
+        return;
+      }
+
+      var response = xhr.response;
+      if (type === "xml") {
+        response = xhr.responseXML || xhr.response;
+        if (!response || !response.documentElement || response.documentElement.tagName === "parsererror") {
+          onerror("Invalid XML:\n" + url);
+          return;
+        }
+      } else if (type === "json") {
+        try {
+          response = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+        } catch (_) {
+          response = null;
+        }
+        if (response === null) {
+          onerror("Invalid JSON:\n" + url);
+          return;
+        }
+      } else if (type === "binary") {
+        response = xhr.response;
+      } else {
+        response = xhr.responseText;
+        if (type === "htmltext") {
+          response = ZoomManager.decodeHTMLentities(response);
+        }
+      }
+      callback(response, xhr);
+    };
+
+    switch (type) {
+      case "xml":
+        xhr.responseType = "document";
+        break;
+      case "binary":
+        xhr.responseType = "arraybuffer";
+        break;
+      default:
+        xhr.responseType = "text";
+    }
+    xhr.send(null);
+  };
+}
 
 QUnit.module("Image loads", {
   beforeEach: function (assert) {
@@ -39,6 +107,9 @@ QUnit.module("Image loads", {
       // Execute the tests faster: don't wait between fake tile loads
       ZoomManager.nextTick = function(f) {return setTimeout(f,0);};
       ZoomManager.ENABLE_WORKER_RENDERING = false;
+      if (shouldUseDeterministicBrowserURLs()) {
+        installDeterministicGetFileOverride(ZoomManager, testwin);
+      }
       ZoomManager.proxy_url = "http://127.0.0.1:8181/proxy.php";
       that.ZoomManager = ZoomManager;
       that.UI = testwin.UI;
