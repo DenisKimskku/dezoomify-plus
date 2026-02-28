@@ -1,5 +1,27 @@
 if (typeof BASE === "undefined") BASE = "/base";
 
+function shouldUseDeterministicBrowserURLs() {
+  if (typeof window === "undefined" || !window.__karma__) return false;
+  var search = (window.location && window.location.search) || "";
+  return search.indexOf("full_browser_matrix=1") < 0;
+}
+
+function getBrowserTestURLs() {
+  if (!shouldUseDeterministicBrowserURLs()) return test_urls;
+  return [
+    {
+      name: "Zoomify local fixture (ImageProperties.xml)",
+      url: "http://127.0.0.1:8181/tests/images/issue_81/image/ImageProperties.xml",
+    },
+    {
+      name: "Zoomify local fixture (tile URL)",
+      url: "http://127.0.0.1:8181/tests/images/issue_81/image/TileGroup0/3-1-6.jpg",
+    },
+  ];
+}
+
+var browser_test_urls = getBrowserTestURLs();
+
 QUnit.module("Image loads", {
   beforeEach: function (assert) {
     var done = assert.async();
@@ -31,7 +53,7 @@ QUnit.module("Image loads", {
   },
 });
 
-test_urls.forEach(function(test) {
+browser_test_urls.forEach(function(test) {
   QUnit.test(test.name, function( assert ) {
     var ZoomManager = this.ZoomManager,
         UI = this.UI,
