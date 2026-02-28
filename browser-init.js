@@ -1,6 +1,11 @@
 (function () {
   var appRuntime = null;
   if (typeof window.createAppRuntime !== "function") return;
+  var searchParams = new URLSearchParams(window.location.search || "");
+  var appRuntimeDisabled =
+    searchParams.get("app_runtime") === "0" ||
+    searchParams.get("runtime") === "0";
+  if (appRuntimeDisabled) return;
 
   appRuntime = window.createAppRuntime({
     apiKeyStorageKey: "dezoomify:api-key:v1",
@@ -28,7 +33,7 @@
     form: document.getElementById("urlform"),
     concurrencyInput: document.getElementById("tile-concurrency"),
     concurrencyValue: document.getElementById("tile-concurrency-value"),
-    searchParams: new URLSearchParams(window.location.search),
+    searchParams: searchParams,
   });
 
   if (appRuntime && typeof appRuntime.start === "function") {

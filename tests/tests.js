@@ -6,8 +6,9 @@ QUnit.module("Image loads", {
     var that = this;
 
     var iframe = document.createElement("iframe");
-    iframe.src = BASE + "/index.html";
+    iframe.src = BASE + "/index.html?app_runtime=0&worker_render=0";
     document.body.appendChild(iframe);
+    that.iframe = iframe;
 
     var testwin = iframe.contentWindow;
 
@@ -15,13 +16,19 @@ QUnit.module("Image loads", {
       var ZoomManager = testwin.ZoomManager;
       // Execute the tests faster: don't wait between fake tile loads
       ZoomManager.nextTick = function(f) {return setTimeout(f,0);};
+      ZoomManager.ENABLE_WORKER_RENDERING = false;
       ZoomManager.proxy_url = "http://127.0.0.1:8181/proxy.php";
       that.ZoomManager = ZoomManager;
       that.UI = testwin.UI;
       that.testwin = testwin;
       done();
     }
-  }
+  },
+  afterEach: function () {
+    if (this.iframe && this.iframe.parentNode) {
+      this.iframe.parentNode.removeChild(this.iframe);
+    }
+  },
 });
 
 test_urls.forEach(function(test) {

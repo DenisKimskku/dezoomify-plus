@@ -623,6 +623,15 @@ var tests = [
     assert.strictEqual(harness.calls.options.maxHistoryItems, 80);
   }),
 
+  test("browser-init supports runtime disable query flag", function () {
+    var harness = createBrowserInitHarness();
+    harness.context.window.location.search = "?app_runtime=0";
+    runScriptInContext(path.join(__dirname, "..", "browser-init.js"), harness.context);
+
+    assert.strictEqual(harness.calls.createAppRuntime, 0);
+    assert.strictEqual(harness.calls.start, 0);
+  }),
+
   test("index.html loads required runtime modules before browser-init", function () {
     var source = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
     var runtimeUtilsMarker = 'src="ui/runtime-utils.js"';
