@@ -129,8 +129,25 @@ window.onerror = function (errmsg, source, lineno) {
 Reset the UI to the initial state.
 */
 UI.reset = function () {
+	document.body.className = "";
 	document.getElementById("error").setAttribute("hidden", "hidden");
 	document.getElementById("status").className = "";
+	var resultActions = document.getElementById("result-actions");
+	if (resultActions) {
+		resultActions.setAttribute("hidden", "hidden");
+	}
+	var existingSaveLink = document.getElementById("save-image-link");
+	if (existingSaveLink && existingSaveLink.parentNode) {
+		existingSaveLink.parentNode.removeChild(existingSaveLink);
+	}
+	var resultTitle = document.getElementById("result-title");
+	if (resultTitle) {
+		resultTitle.textContent = "Image is ready";
+	}
+	var resultSubtitle = document.getElementById("result-subtitle");
+	if (resultSubtitle) {
+		resultSubtitle.textContent = "Click save to download it to your device.";
+	}
 	UI.canvas.width = UI.canvas.height = 0;
 };
 
@@ -158,20 +175,41 @@ Update UI after the image has loaded.
 UI.loadEnd = function () {
 	var status = document.getElementById("status");
 	var a = document.createElement("a");
+	var resultActions = document.getElementById("result-actions");
+	var resultTitle = document.getElementById("result-title");
+	var resultSubtitle = document.getElementById("result-subtitle");
+	var previousLink = document.getElementById("save-image-link");
+	if (previousLink && previousLink.parentNode) {
+		previousLink.parentNode.removeChild(previousLink);
+	}
+	if (resultActions) {
+		resultActions.removeAttribute("hidden");
+	}
 	a.download = "dezoomify-result.jpg";
 	a.href = "#";
 	a.textContent = "Converting image...";
+	a.id = "save-image-link";
 	a.className = "button";
 
 	function finishWithBlob(blob) {
 		if (!(blob instanceof Blob)) {
 			console.error("Unable to access the canvas image data, got an unexpected value", blob);
-			status.className = "finished";
+			a.textContent = "Unable to export image";
+			a.setAttribute("aria-disabled", "true");
+			if (resultSubtitle) {
+				resultSubtitle.textContent = "Rendering completed, but the browser blocked export.";
+			}
 			return;
 		}
 		var url = URL.createObjectURL(blob);
 		a.href = url;
-		a.textContent = "Save image";
+		a.textContent = "Save Image";
+		if (resultTitle) {
+			resultTitle.textContent = "Image is ready";
+		}
+		if (resultSubtitle) {
+			resultSubtitle.textContent = "Click save to download it to your device.";
+		}
 	}
 
 	function exportUsingCanvas() {
@@ -189,30 +227,39 @@ UI.loadEnd = function () {
 			typeof ZoomManager.isWorkerRendererActive === "function" &&
 			ZoomManager.isWorkerRendererActive()
 		) {
-			exportedByWorker = ZoomManager.requestRenderedBlob(
-				"image/jpeg",
-				0.95,
-				function (blob) {
-					if (blob instanceof Blob) {
-						finishWithBlob(blob);
-						return;
+				exportedByWorker = ZoomManager.requestRenderedBlob(
+					"image/jpeg",
+					0.95,
+					function (blob) {
+						if (blob instanceof Blob) {
+							finishWithBlob(blob);
+							return;
+						}
+						try {
+							exportUsingCanvas();
+						} catch (_) {
+							a.textContent = "Unable to export image";
+							a.setAttribute("aria-disabled", "true");
+						}
 					}
-					try {
-						exportUsingCanvas();
-					} catch (_) {
-						status.className = "finished";
-					}
-				}
-			);
+				);
+			}
+			if (!exportedByWorker) {
+				exportUsingCanvas();
+			}
+			document.body.className = "download";
+			if (resultActions) {
+				resultActions.appendChild(a);
+			} else {
+				status.appendChild(a);
+			}
+		} catch (e) {
+			a.textContent = "Unable to export image";
+			a.setAttribute("aria-disabled", "true");
+			if (resultActions) {
+				resultActions.appendChild(a);
+			}
 		}
-		if (!exportedByWorker) {
-			exportUsingCanvas();
-		}
-		document.body.className = "download";
-		status.appendChild(a);
-	} catch (e) {
-		status.className = "finished";
-	}
 };
 
 /**

@@ -37,8 +37,7 @@
       <form id="urlform" action="#">
         <div id="description" class="compact-copy">
           <p>
-            Supports Zoomify, Deep Zoom, IIIF and additional site-specific viewers.
-            If direct page URL parsing fails, use the browser extension to capture the exact zoom source.
+            Paste a page or manifest URL, then start download. For most users this is all you need.
           </p>
         </div>
 
@@ -60,17 +59,34 @@
             title="Use public IIIF sample">Try Sample</button>
         </div>
 
-        <div id="performance-controls">
-          <label for="tile-concurrency">Tile concurrency</label>
-          <input type="range" id="tile-concurrency" min="2" max="20" step="1" value="12"
-            title="Higher values can be faster but may trigger rate limits.">
-          <span id="tile-concurrency-value">12</span>
+        <div class="primary-action-row">
+          <input type="submit" tabindex="30" class="button primary-button" value="Start Download">
         </div>
 
-        <p id="dezoomers"></p>
-        <input type="submit" tabindex="30" class="button" value="Start Download">
+        <details id="download-options" class="download-options">
+          <summary>Advanced download options</summary>
+          <div id="performance-controls">
+            <label for="tile-concurrency">Tile concurrency</label>
+            <input type="range" id="tile-concurrency" min="2" max="20" step="1" value="12"
+              title="Higher values can be faster but may trigger rate limits.">
+            <span id="tile-concurrency-value">12</span>
+          </div>
+          <p id="dezoomers"></p>
+        </details>
       </form>
 
+      <div id="result-actions" class="result-actions" hidden>
+        <p id="result-title" class="result-title">Image is ready</p>
+        <p id="result-subtitle" class="result-subtitle">Click save to download it to your device.</p>
+      </div>
+
+      <section id="advanced-access" class="advanced-access">
+        <details id="advanced-console" class="advanced-console">
+          <summary class="advanced-summary">
+            <span id="advanced-console-title">Advanced Dashboard</span>
+            <span id="advanced-console-meta">Sign in to unlock queue, schedule, and metrics tools.</span>
+          </summary>
+          <div class="advanced-console-body">
       <section id="auth-shell" class="auth-shell" aria-label="Account access">
         <div class="auth-head">
           <h2>Account</h2>
@@ -308,6 +324,9 @@
             </article>
           </section>
         </div>
+      </section>
+          </div>
+        </details>
       </section>
 
       <p id="percent" role="status"></p>

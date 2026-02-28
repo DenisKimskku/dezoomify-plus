@@ -61,6 +61,8 @@
       scheduleRepeat: document.getElementById("schedule-repeat"),
       scheduleStatus: document.getElementById("schedule-status"),
       metricsTab: document.querySelector('.dashboard-tab[data-tab=\"metrics\"]'),
+      advancedConsole: document.getElementById("advanced-console"),
+      advancedConsoleMeta: document.getElementById("advanced-console-meta"),
     };
 
     var state = {
@@ -73,6 +75,7 @@
       },
       loading: false,
       initialized: false,
+      autoOpenedAdvanced: false,
     };
 
     function dispatchStateChange() {
@@ -164,6 +167,26 @@
 
       if (refs.dashboardGate) {
         refs.dashboardGate.hidden = !(enforce && !authenticated);
+      }
+
+      if (refs.advancedConsoleMeta) {
+        if (authenticated && state.user) {
+          refs.advancedConsoleMeta.textContent = "Signed in as " + state.user.email + ". Advanced tools unlocked.";
+        } else if (enforce) {
+          refs.advancedConsoleMeta.textContent = "Sign in to unlock queue, schedule, and metrics tools.";
+        } else {
+          refs.advancedConsoleMeta.textContent = "Sign in to unlock personal queue, schedule, history, and metrics.";
+        }
+      }
+
+      if (refs.advancedConsole) {
+        if (authenticated && !state.autoOpenedAdvanced) {
+          refs.advancedConsole.open = true;
+          state.autoOpenedAdvanced = true;
+        }
+        if (!authenticated) {
+          state.autoOpenedAdvanced = false;
+        }
       }
 
       if (refs.logoutButton) {
@@ -421,6 +444,8 @@
     async function initialize() {
       if (state.initialized) return true;
       state.initialized = true;
+      document.body.setAttribute("data-auth-enforced", "0");
+      document.body.setAttribute("data-authenticated", "0");
       initializeTabs();
       wireEvents();
       await refreshSession();
