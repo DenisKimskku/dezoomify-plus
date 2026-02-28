@@ -55,6 +55,10 @@
       keyPreview: document.getElementById("auth-key-preview"),
       keyRefreshButton: document.getElementById("auth-key-refresh"),
       keyRotateButton: document.getElementById("auth-key-rotate"),
+      keyRevealShell: document.getElementById("auth-key-reveal"),
+      keyValue: document.getElementById("auth-key-value"),
+      keyCopyButton: document.getElementById("auth-key-copy"),
+      keyDismissButton: document.getElementById("auth-key-dismiss"),
       dashboardGate: document.getElementById("dashboard-gate"),
       storageStatus: document.getElementById("storage-health-status"),
       storageRefreshButton: document.getElementById("storage-health-refresh"),
@@ -76,6 +80,7 @@
       loading: false,
       initialized: false,
       autoOpenedAdvanced: false,
+      latestAPIKey: "",
     };
 
     function dispatchStateChange() {
@@ -104,6 +109,53 @@
     function setStatus(message) {
       if (!refs.status) return;
       refs.status.textContent = asText(message, "");
+    }
+
+    function setLatestAPIKey(rawKey) {
+      var key = String(rawKey || "").trim();
+      state.latestAPIKey = key;
+      if (!refs.keyRevealShell || !refs.keyValue) return;
+      if (!key) {
+        refs.keyRevealShell.hidden = true;
+        refs.keyValue.textContent = "Not generated yet.";
+        return;
+      }
+      refs.keyValue.textContent = key;
+      refs.keyRevealShell.hidden = false;
+    }
+
+    async function copyLatestAPIKey() {
+      var key = String(state.latestAPIKey || "").trim();
+      if (!key) {
+        setStatus("No visible API key to copy. Rotate key first.");
+        return false;
+      }
+      try {
+        if (navigator && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          await navigator.clipboard.writeText(key);
+          setStatus("API key copied.");
+          return true;
+        }
+      } catch (_) { }
+
+      try {
+        var temp = document.createElement("textarea");
+        temp.value = key;
+        temp.setAttribute("readonly", "readonly");
+        temp.style.position = "fixed";
+        temp.style.left = "-9999px";
+        document.body.appendChild(temp);
+        temp.select();
+        var copied = document.execCommand("copy");
+        document.body.removeChild(temp);
+        if (copied) {
+          setStatus("API key copied.");
+          return true;
+        }
+      } catch (_) { }
+
+      setStatus("Copy failed. Please copy the key manually.");
+      return false;
     }
 
     function getBodyPayload() {
@@ -197,6 +249,9 @@
       }
       if (refs.keyRotateButton) {
         refs.keyRotateButton.disabled = !authenticated;
+      }
+      if (!authenticated) {
+        setLatestAPIKey("");
       }
 
       if (refs.registerButton && state.config && state.config.openSignup === false) {
@@ -358,7 +413,13 @@
       if (refs.keyPreview) {
         refs.keyPreview.textContent = "API key: " + (payload.keyPreview || "available");
       }
-      setStatus("API key rotated. Save the new key now: " + asText(payload.apiKey, "(not returned)"));
+      if (payload.apiKey) {
+        setLatestAPIKey(payload.apiKey);
+        setStatus("API key rotated. Copy the new key now.");
+      } else {
+        setLatestAPIKey("");
+        setStatus("API key rotated, but key value was not returned.");
+      }
       await refreshSession();
       return true;
     }
@@ -434,6 +495,17 @@
           rotateKey();
         });
       }
+      if (refs.keyCopyButton) {
+        refs.keyCopyButton.addEventListener("click", function () {
+          copyLatestAPIKey();
+        });
+      }
+      if (refs.keyDismissButton) {
+        refs.keyDismissButton.addEventListener("click", function () {
+          setLatestAPIKey("");
+          setStatus("API key hidden.");
+        });
+      }
       if (refs.storageRefreshButton) {
         refs.storageRefreshButton.addEventListener("click", function () {
           refreshStorageHealth();
@@ -446,6 +518,7 @@
       state.initialized = true;
       document.body.setAttribute("data-auth-enforced", "0");
       document.body.setAttribute("data-authenticated", "0");
+      setLatestAPIKey("");
       initializeTabs();
       wireEvents();
       await refreshSession();

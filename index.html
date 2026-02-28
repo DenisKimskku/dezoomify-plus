@@ -109,6 +109,15 @@
           <button type="button" id="auth-key-refresh" class="secondary-action">Refresh Key Info</button>
           <button type="button" id="auth-key-rotate" class="secondary-action">Rotate API Key</button>
         </div>
+        <div id="auth-key-reveal" class="key-reveal" hidden>
+          <p class="ops-note">New API key (shown once):</p>
+          <code id="auth-key-value">Not generated yet.</code>
+          <div class="mini-actions">
+            <button type="button" id="auth-key-copy" class="secondary-action">Copy Key</button>
+            <button type="button" id="auth-key-dismiss" class="secondary-action">Hide Key</button>
+          </div>
+          <p class="ops-note">For security, existing keys are not recoverable. Rotate to generate a new one.</p>
+        </div>
       </section>
 
       <section id="dashboard-shell" class="dashboard-shell" aria-label="Advanced dashboard">
