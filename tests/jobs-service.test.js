@@ -177,6 +177,42 @@ var tests = [
     assert.strictEqual(result.state.history[0].status, "error");
     assert.ok(/boom/.test(result.state.history[0].message));
   }),
+
+  test("hobby cron mode coerces hourly schedules to daily", function () {
+    var jobsPath = require.resolve("../lib/jobs-service");
+    var authPath = require.resolve("../lib/auth-service");
+    var previous = process.env.HOBBY_CRON_ONLY;
+    var hobbyService;
+    try {
+      process.env.HOBBY_CRON_ONLY = "true";
+      delete require.cache[jobsPath];
+      delete require.cache[authPath];
+      hobbyService = require("../lib/jobs-service");
+    } finally {
+      if (typeof previous === "undefined") delete process.env.HOBBY_CRON_ONLY;
+      else process.env.HOBBY_CRON_ONLY = previous;
+      delete require.cache[jobsPath];
+      delete require.cache[authPath];
+    }
+
+    var patched = hobbyService.applyStatePatch(
+      { schedules: [], history: [] },
+      {
+        schedules: [
+          {
+            id: "s-hourly",
+            url: "https://example.com/hourly",
+            repeat: "hourly",
+            status: "scheduled",
+            nextRunAt: 1700000000000,
+          },
+        ],
+      }
+    );
+
+    assert.strictEqual(patched.schedules.length, 1);
+    assert.strictEqual(patched.schedules[0].repeat, "daily");
+  }),
 ];
 
 async function run() {
