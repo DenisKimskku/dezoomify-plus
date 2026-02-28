@@ -1,14 +1,76 @@
 import { compute_signed_path, decrypt_image } from './arts-culture-crypto.js';
 
+function decodeEscapedMetadataText(text) {
+	return text
+		.replace(/\\u002f/gi, "/")
+		.replace(/\\\//g, "/")
+		.replace(/\\u003a/gi, ":")
+		.replace(/\\u003d/gi, "=")
+		.replace(/\\u0026/gi, "&");
+}
+
+function normalizeMetadataUrl(rawUrl) {
+	let url = rawUrl || "";
+	if (url.startsWith("//")) url = "https:" + url;
+	try {
+		const parsed = new URL(url);
+		const path = parsed.pathname.replace(/^\/+/, "").replace(/=.*/, "");
+		return {
+			baseUrl: parsed.origin + "/" + path,
+			path: path
+		};
+	} catch (_) {
+		return null;
+	}
+}
+
+function scoreMetadataCandidate(url, token) {
+	let score = 0;
+	if (/\/ci\//i.test(url)) score += 4;
+	if (token) score += 3;
+	if (/googleusercontent\.com|ggpht\.com/i.test(url)) score += 2;
+	return score;
+}
+
+function findMetadata(text) {
+	const variants = [text];
+	const decoded = decodeEscapedMetadataText(text);
+	if (decoded !== text) variants.push(decoded);
+
+	const patterns = [
+		/]\r?\n?,"(\/\/[a-zA-Z0-9./_\-]+)",(?:"([A-Za-z0-9._\-]+)"|null)/g,
+		/"(\/\/(?:lh\d|geo\d)\.(?:googleusercontent\.com|ggpht\.com)\/[^"]+?)",(?:"([A-Za-z0-9._\-]+)"|null)/g
+	];
+
+	let best = null;
+	for (const variant of variants) {
+		for (const pattern of patterns) {
+			pattern.lastIndex = 0;
+			for (let match = pattern.exec(variant); match; match = pattern.exec(variant)) {
+				const normalized = normalizeMetadataUrl(match[1]);
+				if (!normalized) continue;
+				const candidate = {
+					url: normalized.baseUrl,
+					path: normalized.path,
+					token: match[2] || "",
+					score: scoreMetadataCandidate(match[1], match[2]),
+					index: match.index
+				};
+				if (!best || candidate.score > best.score || (candidate.score === best.score && candidate.index < best.index)) {
+					best = candidate;
+				}
+			}
+		}
+	}
+
+	return best;
+}
+
 function findFile(baseUrl, callback) {
 	ZoomManager.getFile(baseUrl, { type: "htmltext" }, function (text, xhr) {
-		let reg = /]\n?,"(\/\/[a-zA-Z0-9./_\-]+)",(?:"([^"]+)"|null)/m;
-		let matches = text.match(reg);
-		if (!matches) throw new Error("Unable to find arts and culture image metadata URL");
-		let url = 'https:' + matches[1]
-		let path = new URL(url).pathname.slice(1);
-		let token = matches[2] || "";
-		callback(url + "=g", { path, token });
+		let metadata = findMetadata(text);
+		if (!metadata) throw new Error("Unable to find arts and culture image metadata URL");
+		callback(metadata.url + "=g", { path: metadata.path, token: metadata.token });
 	});
 }
 
