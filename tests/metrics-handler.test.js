@@ -12,6 +12,7 @@ function createReq(options) {
     method: opts.method || "GET",
     query: opts.query || {},
     headers: opts.headers || {},
+    url: opts.url || "/api/metrics",
     socket: { remoteAddress: opts.remoteAddress || "203.0.113.9" },
   };
 }
@@ -47,9 +48,14 @@ async function withHandler(envPatch, runFn) {
   });
 
   delete global.__dezoomifyObservabilityMetrics;
-  var handlerPath = require.resolve("../api/metrics");
+  var handlerPath = require.resolve("../api/observability");
   delete require.cache[handlerPath];
-  var handler = require(handlerPath);
+  var rootHandler = require(handlerPath);
+  var handler = function metricsScopeHandler(req, res) {
+    req.query = Object.assign({}, req.query || {}, { scope: "metrics" });
+    req.url = req.url || "/api/metrics";
+    return rootHandler(req, res);
+  };
 
   try {
     return await runFn(handler);

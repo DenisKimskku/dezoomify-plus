@@ -27,16 +27,14 @@ jobs:
           node --check api/proxy.js
           node --check api/jobs.js
           node --check api/cron.js
-          node --check api/metrics.js
-          node --check api/benchmarks.js
+          node --check api/observability.js
           node --check api/submit.js
           node --check api/status.js
           node --check api/download.js
           node --check api/list.js
           node --check api/history.js
           node --check api/retry.js
-          node --check api/retry-bulk.js
-          node --check api/remove-bulk.js
+          node --check api/bulk.js
           node --check api/cancel.js
           node --check lib/jobs-service.js
           node --check lib/benchmark-trends.js

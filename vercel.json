@@ -8,6 +8,22 @@
   ],
   "rewrites": [
     {
+      "source": "/api/metrics",
+      "destination": "/api/observability?scope=metrics"
+    },
+    {
+      "source": "/api/benchmarks",
+      "destination": "/api/observability?scope=benchmarks"
+    },
+    {
+      "source": "/api/retry-bulk",
+      "destination": "/api/bulk?op=retry"
+    },
+    {
+      "source": "/api/remove-bulk",
+      "destination": "/api/bulk?op=remove"
+    },
+    {
       "source": "/proxy.php",
       "destination": "/api/proxy"
     }

@@ -1,7 +1,7 @@
 "use strict";
 
 const { appendBenchmarkRun, listBenchmarkRuns } = require("../lib/benchmark-trends");
-const { createRequestObserver } = require("../lib/observability");
+const { createRequestObserver, getMetricsSnapshot } = require("../lib/observability");
 
 function toSingle(value) {
   return Array.isArray(value) ? value[0] : value;
@@ -12,6 +12,30 @@ function sendJSON(res, statusCode, payload) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.end(JSON.stringify(payload));
+}
+
+function resolveScope(req) {
+  const query = req.query || {};
+  const queryScope = String(toSingle(query.scope || query.route || query.endpoint || "")).trim().toLowerCase();
+  if (queryScope === "metrics" || queryScope === "benchmarks") return queryScope;
+
+  const url = String((req && req.url) || "").toLowerCase();
+  if (url.indexOf("/api/metrics") >= 0) return "metrics";
+  if (url.indexOf("/api/benchmarks") >= 0) return "benchmarks";
+  return "";
+}
+
+function isMetricsAuthorized(req) {
+  const expected = String(process.env.METRICS_READ_TOKEN || "").trim();
+  if (!expected) return true;
+
+  const queryToken = toSingle((req.query && (req.query.token || req.query.metrics_token)) || "");
+  const headerToken = toSingle(req.headers["x-metrics-token"] || "");
+  const auth = toSingle(req.headers.authorization || "");
+  const match = String(auth).match(/^Bearer\s+(.+)$/i);
+  const bearerToken = match ? String(match[1]).trim() : "";
+
+  return queryToken === expected || headerToken === expected || bearerToken === expected;
 }
 
 function readJSONBody(req) {
@@ -62,22 +86,39 @@ function getRequestToken(req) {
   return "";
 }
 
-function isAuthorized(req, expectedToken) {
+function isBenchmarkAuthorized(req, expectedToken) {
   const expected = String(expectedToken || "").trim();
   if (!expected) return true;
   return getRequestToken(req) === expected;
 }
 
-module.exports = async function handler(req, res) {
-  const finish = createRequestObserver("benchmarks", req);
+async function handleMetrics(req, res) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    sendJSON(res, 405, { ok: false, error: "Only GET requests are supported." });
+    return { statusCode: 405, reason: "method_not_allowed" };
+  }
+
+  if (!isMetricsAuthorized(req)) {
+    sendJSON(res, 401, { ok: false, error: "Unauthorized." });
+    return { statusCode: 401, reason: "unauthorized" };
+  }
+
+  sendJSON(res, 200, {
+    ok: true,
+    metrics: getMetricsSnapshot(),
+  });
+  return { statusCode: 200, reason: "snapshot" };
+}
+
+async function handleBenchmarks(req, res) {
   const readToken = String(process.env.BENCHMARK_READ_TOKEN || "").trim();
   const writeToken = String(process.env.BENCHMARK_WRITE_TOKEN || readToken).trim();
 
   if (req.method === "GET") {
-    if (!isAuthorized(req, readToken)) {
+    if (!isBenchmarkAuthorized(req, readToken)) {
       sendJSON(res, 401, { ok: false, error: "Unauthorized." });
-      finish(401, { reason: "unauthorized_read" });
-      return;
+      return { statusCode: 401, reason: "unauthorized_read" };
     }
     const query = req.query || {};
     const suite = toSingle(query.suite || "jobs-state");
@@ -89,23 +130,26 @@ module.exports = async function handler(req, res) {
       backend: result.backend,
       runs: result.runs,
     });
-    finish(200, { reason: "list", suite: result.suite, backend: result.backend, runs: result.runs.length });
-    return;
+    return {
+      statusCode: 200,
+      reason: "list",
+      suite: result.suite,
+      backend: result.backend,
+      runs: result.runs.length,
+    };
   }
 
   if (req.method === "POST") {
-    if (!isAuthorized(req, writeToken)) {
+    if (!isBenchmarkAuthorized(req, writeToken)) {
       sendJSON(res, 401, { ok: false, error: "Unauthorized." });
-      finish(401, { reason: "unauthorized_write" });
-      return;
+      return { statusCode: 401, reason: "unauthorized_write" };
     }
     let payload;
     try {
       payload = await readJSONBody(req);
     } catch (error) {
       sendJSON(res, 400, { ok: false, error: error.message || String(error) });
-      finish(400, { reason: "invalid_body" });
-      return;
+      return { statusCode: 400, reason: "invalid_body" };
     }
     const result = await appendBenchmarkRun(
       payload && payload.suite ? payload.suite : "jobs-state",
@@ -119,11 +163,27 @@ module.exports = async function handler(req, res) {
       total: result.total,
       entry: result.entry,
     });
-    finish(201, { reason: "append", suite: result.suite, backend: result.backend });
-    return;
+    return { statusCode: 201, reason: "append", suite: result.suite, backend: result.backend };
   }
 
   res.setHeader("Allow", "GET, POST");
   sendJSON(res, 405, { ok: false, error: "Only GET and POST requests are supported." });
-  finish(405, { reason: "method_not_allowed" });
+  return { statusCode: 405, reason: "method_not_allowed" };
+}
+
+module.exports = async function handler(req, res) {
+  const scope = resolveScope(req);
+  const metricName = scope === "metrics" ? "metrics" : scope === "benchmarks" ? "benchmarks" : "observability";
+  const finish = createRequestObserver(metricName, req);
+
+  if (!scope) {
+    sendJSON(res, 404, { ok: false, error: "Unknown observability endpoint." });
+    finish(404, { reason: "unknown_scope" });
+    return;
+  }
+
+  const result = scope === "metrics"
+    ? await handleMetrics(req, res)
+    : await handleBenchmarks(req, res);
+  finish(result.statusCode || 200, result);
 };

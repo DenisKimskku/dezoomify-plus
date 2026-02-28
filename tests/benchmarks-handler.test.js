@@ -13,6 +13,7 @@ function createReq(options) {
     query: opts.query || {},
     headers: opts.headers || {},
     body: opts.body,
+    url: opts.url || "/api/benchmarks",
     socket: { remoteAddress: opts.remoteAddress || "198.51.100.40" },
     on: function () {},
   };
@@ -54,11 +55,16 @@ async function withHandler(envPatch, runFn) {
 
   var benchmarksLibPath = require.resolve("../lib/benchmark-trends");
   var observabilityPath = require.resolve("../lib/observability");
-  var handlerPath = require.resolve("../api/benchmarks");
+  var handlerPath = require.resolve("../api/observability");
   delete require.cache[benchmarksLibPath];
   delete require.cache[observabilityPath];
   delete require.cache[handlerPath];
-  var handler = require(handlerPath);
+  var rootHandler = require(handlerPath);
+  var handler = function benchmarksScopeHandler(req, res) {
+    req.query = Object.assign({}, req.query || {}, { scope: "benchmarks" });
+    req.url = req.url || "/api/benchmarks";
+    return rootHandler(req, res);
+  };
 
   try {
     return await runFn(handler);

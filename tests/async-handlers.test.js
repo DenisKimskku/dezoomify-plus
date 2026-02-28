@@ -67,8 +67,7 @@ async function withHandlers(envPatch, runFn) {
   var downloadPath = require.resolve("../api/download");
   var listPath = require.resolve("../api/list");
   var retryPath = require.resolve("../api/retry");
-  var retryBulkPath = require.resolve("../api/retry-bulk");
-  var removeBulkPath = require.resolve("../api/remove-bulk");
+  var bulkPath = require.resolve("../api/bulk");
   var cancelPath = require.resolve("../api/cancel");
   delete require.cache[asyncServicePath];
   delete require.cache[submitPath];
@@ -76,8 +75,7 @@ async function withHandlers(envPatch, runFn) {
   delete require.cache[downloadPath];
   delete require.cache[listPath];
   delete require.cache[retryPath];
-  delete require.cache[retryBulkPath];
-  delete require.cache[removeBulkPath];
+  delete require.cache[bulkPath];
   delete require.cache[cancelPath];
 
   var asyncService = require(asyncServicePath);
@@ -86,8 +84,7 @@ async function withHandlers(envPatch, runFn) {
   var download = require(downloadPath);
   var list = require(listPath);
   var retry = require(retryPath);
-  var retryBulk = require(retryBulkPath);
-  var removeBulk = require(removeBulkPath);
+  var bulk = require(bulkPath);
   var cancel = require(cancelPath);
 
   try {
@@ -98,8 +95,16 @@ async function withHandlers(envPatch, runFn) {
       download: download,
       list: list,
       retry: retry,
-      retryBulk: retryBulk,
-      removeBulk: removeBulk,
+      retryBulk: function retryBulk(req, res) {
+        req.query = Object.assign({}, req.query || {}, { op: "retry" });
+        req.url = req.url || "/api/retry-bulk";
+        return bulk(req, res);
+      },
+      removeBulk: function removeBulk(req, res) {
+        req.query = Object.assign({}, req.query || {}, { op: "remove" });
+        req.url = req.url || "/api/remove-bulk";
+        return bulk(req, res);
+      },
       cancel: cancel,
     });
   } finally {
@@ -113,8 +118,7 @@ async function withHandlers(envPatch, runFn) {
     delete require.cache[downloadPath];
     delete require.cache[listPath];
     delete require.cache[retryPath];
-    delete require.cache[retryBulkPath];
-    delete require.cache[removeBulkPath];
+    delete require.cache[bulkPath];
     delete require.cache[cancelPath];
     delete global.__dezoomifyAsyncMemoryStore;
     delete global.__dezoomifyObservabilityMetrics;
