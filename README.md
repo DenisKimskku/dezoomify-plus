@@ -2,6 +2,16 @@
 
 [![Dezoomify cover image](./cover.png)](https://ophir.alwaysdata.net/dezoomify/dezoomify.html)
 
+## Dezoomify Plus (this fork)
+
+This fork keeps upstream dezooming compatibility and adds a Vercel-first service layer:
+
+- Public one-page downloader for non-technical users.
+- Auth-gated advanced dashboard (queue, history, schedules, metrics, retention).
+- Account system with per-user API key rotation.
+- Admin console for service snapshots (users + owner/job summaries).
+- Vercel Hobby-safe defaults (daily cron and guarded scheduling).
+
 ## Download zoomable images
 
 _Dezoomify_ extracts full high-resolution images from online zoomable image interfaces.
@@ -13,6 +23,11 @@ In order to find the URL of the zoomable that dezoomify requires, you can instal
 ## Try it
 If you are not interested in the source code and just want to assemble tiles of (dezoomify) a zoomify-powered image, go there : [**unzoomify an image**](https://ophir.alwaysdata.net/dezoomify/dezoomify.html)
 
+For this fork, deploy your own instance on Vercel and use:
+
+- `Simple Download` for one-off exports.
+- `Dashboard` for authenticated operations (queue/schedules/history/metrics/admin).
+
 ## Troubleshooting
 #### FAQ
 If you have problems while downloading an image, then read the **[FAQ](https://github.com/lovasoa/dezoomify/wiki/Dezoomify-FAQ)**.
@@ -22,6 +37,15 @@ Please go the the [Github issue page of the project](https://github.com/lovasoa/
 and explain your problem.
 Please be clear, and give the URL of the page containing the image dezoomify
 failed to process.
+
+#### About blocked websites (401 / bot challenge)
+Some websites block server-side fetches with anti-bot protections and return `401`/challenge HTML to the proxy.
+In those cases:
+
+- Dezoomify is not failing on tile assembly; the source site is denying access.
+- Try a direct zoom manifest URL (`info.json`, `ImageProperties.xml`, `dzi`) instead of the top-level page URL.
+- Use the browser extension to capture the exact zoom source URL from a real browsing session.
+- Prefer public cultural heritage viewers and IIIF endpoints for reliable results.
 
 ## Supported zoomable image formats
 The following formats are supported by dezoomify:
@@ -242,14 +266,17 @@ This repository can be deployed directly as a Vercel app.
 
 1. Import the repository in Vercel.
 2. Keep the root directory as-is.
-3. Deploy.
+3. Set environment variables (below).
+4. Deploy.
 
 The project includes:
 - `/api/proxy` as a serverless proxy endpoint.
 - `/api/jobs` for persisted schedule/history state.
 - `/api/cron` for background schedule execution.
 - `/api/metrics` for runtime service metrics snapshots.
+- `/api/my-metrics` for owner-scoped dashboard metrics.
 - `/api/benchmarks` for persistent benchmark trend history.
+- `/api/admin` for admin snapshot views.
 - `/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/session`, `/api/auth/key`, `/api/auth/key/rotate` for account and key lifecycle.
 - `/api/storage-health` for runtime storage diagnostics.
 - `/api/submit`, `/api/status`, `/api/download`, `/api/list`, `/api/history`, `/api/retry`, `/api/retry-bulk`, `/api/remove-bulk`, `/api/cancel` for async artifact jobs and operations UX.
@@ -257,6 +284,33 @@ The project includes:
 - `vercel.json` cron entry (`0 3 * * *`) that hits `/api/cron` once daily (Hobby-compatible).
 
 Primary hosted target is Vercel serverless + persistent storage (`KV_REST_API_URL`/`KV_REST_API_TOKEN` or `REDIS_URL`).
+
+### Recommended environment variables (Vercel)
+
+Required for auth-gated dashboard:
+
+- `REDIS_URL` **or** `KV_REST_API_URL` + `KV_REST_API_TOKEN`
+- `AUTH_ENFORCE_ADVANCED=true`
+- `CRON_SECRET=<long-random-secret>`
+- `ADMIN_EMAILS=your@email.com`
+
+Recommended:
+
+- `AUTH_OPEN_SIGNUP=true`
+- `AUTH_PASSWORD_MIN_LENGTH=10`
+- `METRICS_READ_TOKEN=<long-random-token>`
+- `HOBBY_CRON_ONLY=true` (recommended on Vercel Hobby)
+
+Optional hardening:
+
+- `API_AUTH_REQUIRED=true`
+- `API_DISABLE_ANON=true`
+
+Important behavior notes:
+
+- If auth is enforced but persistent storage is missing, auth routes fail fast with `STORAGE_UNAVAILABLE`.
+- Vercel Hobby supports only daily cron schedules in-product (`HOBBY_CRON_ONLY=true` keeps UI/server behavior aligned).
+- The project is configured to keep Serverless Function count within Hobby limits.
 
 ## Embed in your website
 
@@ -277,20 +331,41 @@ Example:
 https://your-dezoomify-app.vercel.app/?url=https%3A%2F%2Fmap-view.nls.uk%2Fiiif%2F19619%252F196194600%2Finfo.json&autostart=1
 ```
 
+## Custom domain (Cloudflare + Vercel)
+
+To serve this app at a subdomain such as `dz.deniskim1.com`:
+
+1. In Vercel project settings, add `dz.deniskim1.com` as a domain.
+2. In Cloudflare DNS, create or update:
+   - `Type`: `CNAME`
+   - `Name`: `dz`
+   - `Target`: `cname.vercel-dns.com`
+3. If Cloudflare shows conflicting records for `dz`, remove the conflicting record and keep only the Vercel CNAME.
+4. Set proxy mode to **DNS only** (gray cloud) while validating.
+5. Wait for DNS propagation, then confirm status is `Valid Configuration` in Vercel domains.
+
+Notes:
+
+- Orange-cloud proxy mode can work later, but DNS-only is the least error-prone for initial validation.
+- Keep your Git production branch aligned with the Vercel production branch (`master` or `main`) to avoid “No Production Deployment” state.
+
 ## UX features for hosted deployments
 
 The web UI now includes:
 
-- **Public downloader**: paste URL, tune tile concurrency, and run direct dezoomify flow.
-- **Account shell**: create account/sign in, view session state, rotate personal API key.
-- **Dashboard tabs**: queue, history, schedules, metrics, and settings (including storage health).
-- **Service limits + rate feedback**: includes retry-after behavior and quota identity details.
+- **Simple-first public flow**: URL input, sample shortcut, staged progress (Analyze/Fetch/Compose/Ready), and sticky save bar.
+- **Experience switch**: `Simple Download` vs `Dashboard`, with persisted preference.
+- **Account shell**: create account/sign in, session state, one-time API key reveal after rotation.
+- **Dashboard tabs**: queue, history, schedules, metrics, settings, and admin (admin role only).
+- **Metrics scope split**: personal metrics for signed-in users, service metrics for admin.
+- **Service limits + rate feedback**: retry-after countdown, quota identity details, and action cooldown.
 - Automatic off-main-thread tile rendering in supported browsers (Web Worker + OffscreenCanvas), with fallback to classic mode.
 
 Storage fallback behavior:
 
 - If `/api/jobs` is reachable, schedules/history are persisted on the server.
-- If not, the UI automatically falls back to browser local storage.
+- If advanced auth is not enforced, the UI can fall back to browser local storage.
+- If advanced auth is enforced, account/advanced flows require persistent storage.
 
 ## Always-on scheduling (Vercel Cron + server state)
 
@@ -360,6 +435,12 @@ Endpoints:
 - `POST /api/auth/key/rotate`
 - `GET /api/storage-health`
 
+Notes:
+
+- Passwords are hashed at rest; the server does not expose raw passwords.
+- API keys are only shown once on rotation (`POST /api/auth/key/rotate`).
+- Admin role is assigned by `ADMIN_EMAILS` (comma-separated exact emails).
+
 Auth environment variables:
 
 - `AUTH_ENFORCE_ADVANCED` (`true`/`false`, default `false`)
@@ -415,11 +496,17 @@ Environment variables:
 - `OBS_ALERT_QUOTA_WARN_PER_MIN` / `OBS_ALERT_QUOTA_CRIT_PER_MIN` (defaults `4` / `10`)
 - `METRICS_READ_TOKEN` (optional; if set, required for `/api/metrics`)
 
-Metrics endpoint:
+Metrics and admin endpoints:
 
-- `GET /api/metrics` returns per-process counters snapshot.
-- Snapshot includes rolling minute buckets (`recentBuckets`) and computed `rollups`/`alerts`.
-- Auth if configured:
+- `GET /api/my-metrics`: owner-scoped metrics view (personal dashboard mode).
+- `GET /api/metrics`: service-wide metrics (admin scope when auth enforcement is enabled).
+- `GET /api/admin`: admin snapshot (users + sampled owner/job/async summaries).
+
+Behavior:
+
+- `my-metrics` is the default dashboard metrics mode for signed-in non-admin users.
+- `metrics` + `admin` require admin role when `AUTH_ENFORCE_ADVANCED=true`.
+- `metrics` can also require `METRICS_READ_TOKEN`:
   - `Authorization: Bearer <METRICS_READ_TOKEN>`
   - or header `x-metrics-token`
   - or query `?token=...`

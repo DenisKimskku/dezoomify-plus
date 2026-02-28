@@ -115,9 +115,13 @@ Status legend: `DONE`, `NEXT`, `PLANNED`
 - Added retention controls UI (`ui/retention-controls.js`) with local persistence and startup pruning for history/async finished jobs; added server-side finished async retention (`ASYNC_FINISHED_RETENTION_MS`) and server history retention (`JOBS_HISTORY_RETENTION_MS`) with new cron counters.
 - Enhanced metrics UI with latency bucket summary lines, alert history hints, and per-snapshot delta text ("what changed").
 - Added new deterministic/perf checks (`tests/history-handler.test.js`, `tests/async-ui-perf.test.js`, `tests/bench-async-endpoints.js`) and CI guardrails for async UI rendering and async endpoint benchmarks.
+- Shipped v2 simple-first UX in `index.html`/`style.css`/`zoommanager.js`: experience switch (Simple vs Dashboard), staged download timeline, concise errors, and sticky save action.
+- Added auth-gated advanced dashboard structure with tabbed IA (Queue/History/Schedules/Metrics/Settings/Admin) and reduced default UI clutter for public users.
+- Added personal metrics mode (`/api/my-metrics`) and admin snapshot endpoint (`/api/admin`) with role-aware UI controls.
+- Consolidated observability/auth/admin rewrites under a single handler (`/api/observability`) to stay within Vercel Hobby function limits.
 
 ## Next Execution Slice
 
-1. Add deterministic API tests for `/api/cancel` conflict paths and `/api/history` auth/fallback edge cases to broaden negative-coverage.
-2. Add pagination/window controls for Async Queue (`Previous` + cursor-backed server paging) to complement current windowed rendering.
-3. Tune retention defaults and cron cleanup budgets against production traffic once deployed on Vercel/KV.
+1. Add negative-path API tests for admin and auth guardrails (`/api/admin`, `/api/my-metrics`, `/api/auth/*` rate abuse/lockout cases).
+2. Extend cross-browser integration coverage to validate simple-mode and dashboard-mode rendering parity.
+3. Tune retention defaults and cron cleanup budgets against production traffic once deployed on Vercel persistent storage.
