@@ -96,11 +96,38 @@ Display an error in the UI.
 UI.error = function (errmsg) {
 	document.getElementById("percent").textContent = "";
 	document.getElementById("error").removeAttribute("hidden");
+	var helpEl = document.getElementById("error-help");
 	var error_img = "error.svg?error=" + encodeURIComponent(errmsg);
 	document.getElementById("error-img").src = error_img;
+	var defaultHelp =
+		"We couldn't dezoomify that URL. Try using the browser extension to capture the exact source URL, or test with a direct manifest/image endpoint.";
+	var urltxt = document.getElementById("url").value;
+	var detailLower = String(errmsg || "").toLowerCase();
+	var helpMessage = defaultHelp;
+	if (
+		detailLower.indexOf("making sure you're not a bot") >= 0 ||
+		detailLower.indexOf("captcha") >= 0 ||
+		detailLower.indexOf("anubis") >= 0 ||
+		detailLower.indexOf("cloudflare") >= 0 ||
+		detailLower.indexOf("access denied") >= 0
+	) {
+		helpMessage =
+			"This website blocked automated fetch requests (bot protection). Use the browser extension to capture the direct image or manifest URL from your own browser session.";
+	}
+	if (
+		detailLower.indexOf("unable to fetch") >= 0 &&
+		(detailLower.indexOf("http 401") >= 0 || detailLower.indexOf("http 403") >= 0)
+	) {
+		helpMessage =
+			"This URL requires authentication or is blocked for automated requests. Try a direct image/manifest URL, or use the browser extension.";
+	}
+	if (String(urltxt || "").toLowerCase().indexOf("unsplash.com/") >= 0) {
+		helpMessage =
+			"Unsplash page URLs are bot-protected and are not zoom-tile manifests. Open the actual image URL (usually images.unsplash.com/...) and download directly.";
+	}
+	if (helpEl) helpEl.textContent = helpMessage;
 	if (errmsg) {
 		document.getElementById("errormsg").textContent = errmsg;
-		var urltxt = document.getElementById("url").value;
 		try {
 			var url = new URL(urltxt);
 		} catch (e) { // not a valid URL
