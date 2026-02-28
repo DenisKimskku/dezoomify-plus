@@ -175,7 +175,7 @@ textarea {
 }
 
 input#url,
-.mini-form input,
+.mini-form input:not([type="checkbox"]):not([type="radio"]),
 .mini-form select,
 .auth-grid input {
   width: 100%;
@@ -192,7 +192,7 @@ input#url {
 }
 
 input#url:focus,
-.mini-form input:focus,
+.mini-form input:not([type="checkbox"]):not([type="radio"]):focus,
 .mini-form select:focus,
 .auth-grid input:focus {
   outline: 2px solid rgba(31, 111, 93, 0.24);
@@ -569,12 +569,21 @@ body[data-authenticated="1"] #dashboard-shell {
 .inline-toggle {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 0 var(--space-2);
-  min-height: 34px;
+  gap: var(--space-2);
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  min-height: 0;
   color: var(--text-soft);
+}
+
+.inline-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
 }
 
 .ops-note,
