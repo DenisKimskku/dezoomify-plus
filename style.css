@@ -137,6 +137,39 @@ a:visited {
   line-height: 1.5;
 }
 
+.experience-switch {
+  margin-top: var(--space-4);
+  display: inline-flex;
+  gap: var(--space-1);
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(31, 111, 93, 0.24);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.experience-tab {
+  border: 0;
+  border-radius: 999px;
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  background: transparent;
+  color: var(--accent-ink);
+  cursor: pointer;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.experience-tab.active {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(20, 60, 50, 0.2);
+}
+
+.hero-mode-note {
+  margin-top: var(--space-2);
+  font-size: 0.92rem;
+}
+
 .image-surface {
   overflow: auto;
   padding: 0;
@@ -153,6 +186,14 @@ a:visited {
   padding: var(--space-6);
   display: grid;
   gap: var(--space-4);
+}
+
+body[data-experience="simple"] #advanced-access {
+  display: none;
+}
+
+body[data-experience="dashboard"] #advanced-access {
+  display: block;
 }
 
 #urlform {
@@ -344,6 +385,72 @@ input#url:focus,
 #result-actions #save-image-link[aria-disabled="true"] {
   opacity: 0.65;
   pointer-events: none;
+}
+
+#save-image-link-sticky[aria-disabled="true"] {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.download-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.download-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  padding: 10px 12px;
+  color: var(--text-soft);
+  font-size: 0.88rem;
+}
+
+.download-step-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #b3bcb6;
+  flex: 0 0 auto;
+}
+
+.download-step.active {
+  color: var(--accent-ink);
+  border-color: rgba(31, 111, 93, 0.36);
+  background: #f2f9f6;
+}
+
+.download-step.active .download-step-dot {
+  background: var(--accent);
+}
+
+.download-step.done {
+  color: #1c4f42;
+  border-color: #89b4a4;
+  background: #ebf7f1;
+}
+
+.download-step.done .download-step-dot {
+  background: #2f7d4a;
+}
+
+.download-step.error {
+  color: #7a2929;
+  border-color: #debbbb;
+  background: #fff1f1;
+}
+
+.download-step.error .download-step-dot {
+  background: #9b3a3a;
+}
+
+#download-steps-status {
+  font-size: 0.92rem;
 }
 
 .advanced-access {
@@ -760,6 +867,46 @@ body[data-authenticated="1"] #dashboard-shell {
   background: #fff;
 }
 
+.sticky-save-bar {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-4);
+  transform: translateX(-50%);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: min(640px, calc(100vw - 20px));
+  max-width: min(760px, calc(100vw - 20px));
+  border: 1px solid rgba(31, 111, 93, 0.35);
+  border-radius: 999px;
+  background: rgba(19, 64, 53, 0.96);
+  color: #e9f4f0;
+  box-shadow: 0 18px 38px rgba(13, 26, 22, 0.34);
+  padding: 10px 12px 10px 18px;
+  backdrop-filter: blur(8px);
+}
+
+#sticky-save-text {
+  margin: 0;
+  font-weight: 700;
+}
+
+#save-image-link-sticky {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 var(--space-4);
+  border-radius: 999px;
+  border: 1px solid #5ec5a0;
+  background: #2fa67f;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 800;
+}
+
 #percent {
   margin: var(--space-1) 0 0;
   text-align: center;
@@ -823,6 +970,10 @@ body.download #advanced-access {
     padding: var(--space-5);
   }
 
+  .download-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .auth-grid,
   .mini-row,
   .metrics-kpis,
@@ -861,6 +1012,20 @@ body.download #advanced-access {
     padding: var(--space-4);
   }
 
+  .experience-switch {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .experience-tab {
+    width: 100%;
+  }
+
+  .download-steps {
+    grid-template-columns: 1fr;
+  }
+
   .button,
   .secondary-action {
     width: 100%;
@@ -872,5 +1037,15 @@ body.download #advanced-access {
 
   #performance-controls {
     flex-wrap: wrap;
+  }
+
+  .sticky-save-bar {
+    left: 10px;
+    right: 10px;
+    transform: none;
+    min-width: 0;
+    max-width: none;
+    border-radius: var(--radius-md);
+    bottom: 10px;
   }
 }

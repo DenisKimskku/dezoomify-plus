@@ -15,6 +15,33 @@ UI.canvas = document.getElementById("rendering-canvas");
 UI.dezoomers = document.getElementById("dezoomers");
 UI.ratio = 1;
 UI.MAX_CANVAS_AREA = 16384 * 16384; // See https://github.com/jhildenbiddle/canvas-size
+UI.STEPS = ["analyze", "fetch", "compose", "ready"];
+
+UI.setDownloadStep = function (stepName, statusText, hasError) {
+	var container = document.getElementById("download-steps");
+	if (!container) return;
+	var target = String(stepName || "analyze").toLowerCase();
+	var targetIndex = UI.STEPS.indexOf(target);
+	if (targetIndex < 0) targetIndex = 0;
+	var nodes = container.querySelectorAll(".download-step");
+	for (var i = 0; i < nodes.length; i++) {
+		var node = nodes[i];
+		node.classList.remove("active");
+		node.classList.remove("done");
+		node.classList.remove("error");
+		if (hasError) {
+			if (i < targetIndex) node.classList.add("done");
+			else if (i === targetIndex) node.classList.add("error");
+			continue;
+		}
+		if (i < targetIndex) node.classList.add("done");
+		else if (i === targetIndex) node.classList.add("active");
+	}
+	var statusNode = document.getElementById("download-steps-status");
+	if (statusNode && typeof statusText === "string" && statusText.length > 0) {
+		statusNode.textContent = statusText;
+	}
+};
 
 /**
 Adjusts the size of the image, so that is fits page width or page height
@@ -47,6 +74,7 @@ Sets the width and height of the canvas
 UI.setupRendering = function (data) {
 	document.body.className = "loading";
 	document.getElementById("error").setAttribute("hidden", true);
+	UI.setDownloadStep("fetch", "Analyzing source and preparing tile map...", false);
 	var useWorkerRenderer =
 		(typeof ZoomManager !== "undefined") &&
 		ZoomManager.status &&
@@ -96,6 +124,17 @@ Display an error in the UI.
 UI.error = function (errmsg) {
 	document.getElementById("percent").textContent = "";
 	document.getElementById("error").removeAttribute("hidden");
+	var stickyBar = document.getElementById("sticky-save-bar");
+	if (stickyBar) {
+		stickyBar.setAttribute("hidden", "hidden");
+	}
+	var failureStep = "fetch";
+	try {
+		if (ZoomManager && ZoomManager.status && Number(ZoomManager.status.loaded || 0) > 0) {
+			failureStep = "compose";
+		}
+	} catch (_) { }
+	UI.setDownloadStep(failureStep, "Download failed. Review the guidance below.", true);
 	var helpEl = document.getElementById("error-help");
 	var error_img = "error.svg?error=" + encodeURIComponent(errmsg);
 	document.getElementById("error-img").src = error_img;
@@ -159,9 +198,24 @@ UI.reset = function () {
 	document.body.className = "";
 	document.getElementById("error").setAttribute("hidden", "hidden");
 	document.getElementById("status").className = "";
+	UI.setDownloadStep("analyze", "Paste a URL to begin.", false);
 	var resultActions = document.getElementById("result-actions");
 	if (resultActions) {
 		resultActions.setAttribute("hidden", "hidden");
+	}
+	var stickyBar = document.getElementById("sticky-save-bar");
+	var stickyText = document.getElementById("sticky-save-text");
+	var stickyLink = document.getElementById("save-image-link-sticky");
+	if (stickyBar) {
+		stickyBar.setAttribute("hidden", "hidden");
+	}
+	if (stickyText) {
+		stickyText.textContent = "Download ready";
+	}
+	if (stickyLink) {
+		stickyLink.href = "#";
+		stickyLink.textContent = "Save Image";
+		stickyLink.setAttribute("aria-disabled", "true");
 	}
 	var existingSaveLink = document.getElementById("save-image-link");
 	if (existingSaveLink && existingSaveLink.parentNode) {
@@ -185,6 +239,14 @@ Update the state of the progress bar.
 @param {String} description current state description
 */
 UI.updateProgress = function (percent, text) {
+	var safeText = String(text || "");
+	if (safeText) {
+		if (safeText.indexOf("Preparing tiles load") >= 0) {
+			UI.setDownloadStep("fetch", "Source validated. Starting tile requests...", false);
+		} else if (safeText.indexOf("Loading the tiles") >= 0) {
+			UI.setDownloadStep("compose", safeText, false);
+		}
+	}
 	if (!percent) {
 		document.getElementById("percent").innerHTML = text;
 		return;
@@ -193,6 +255,9 @@ UI.updateProgress = function (percent, text) {
 	document.getElementById("percent").innerHTML = text + ' (' + percent + "%)";
 	document.getElementById("progressbar").style.width = percent + "%";
 	document.getElementById("progressbar").setAttribute("aria-valuenow", percent);
+	if (percent >= 98) {
+		UI.setDownloadStep("compose", "Finalizing render and preparing download...", false);
+	}
 	document.title = "(" + percent + "%) Dezoomify";
 };
 
@@ -200,11 +265,15 @@ UI.updateProgress = function (percent, text) {
 Update UI after the image has loaded.
 */
 UI.loadEnd = function () {
+	UI.setDownloadStep("ready", "All tiles loaded. Generating downloadable file...", false);
 	var status = document.getElementById("status");
 	var a = document.createElement("a");
 	var resultActions = document.getElementById("result-actions");
 	var resultTitle = document.getElementById("result-title");
 	var resultSubtitle = document.getElementById("result-subtitle");
+	var stickyBar = document.getElementById("sticky-save-bar");
+	var stickyText = document.getElementById("sticky-save-text");
+	var stickyLink = document.getElementById("save-image-link-sticky");
 	var previousLink = document.getElementById("save-image-link");
 	if (previousLink && previousLink.parentNode) {
 		previousLink.parentNode.removeChild(previousLink);
@@ -217,12 +286,31 @@ UI.loadEnd = function () {
 	a.textContent = "Converting image...";
 	a.id = "save-image-link";
 	a.className = "button";
+	if (stickyLink) {
+		stickyLink.download = "dezoomify-result.jpg";
+		stickyLink.href = "#";
+		stickyLink.textContent = "Converting image...";
+		stickyLink.setAttribute("aria-disabled", "true");
+	}
+	if (stickyText) {
+		stickyText.textContent = "Rendering complete. Preparing file...";
+	}
+	if (stickyBar) {
+		stickyBar.removeAttribute("hidden");
+	}
 
 	function finishWithBlob(blob) {
 		if (!(blob instanceof Blob)) {
 			console.error("Unable to access the canvas image data, got an unexpected value", blob);
 			a.textContent = "Unable to export image";
 			a.setAttribute("aria-disabled", "true");
+			if (stickyLink) {
+				stickyLink.textContent = "Unable to export image";
+				stickyLink.setAttribute("aria-disabled", "true");
+			}
+			if (stickyText) {
+				stickyText.textContent = "Export failed";
+			}
 			if (resultSubtitle) {
 				resultSubtitle.textContent = "Rendering completed, but the browser blocked export.";
 			}
@@ -231,12 +319,22 @@ UI.loadEnd = function () {
 		var url = URL.createObjectURL(blob);
 		a.href = url;
 		a.textContent = "Save Image";
+		a.removeAttribute("aria-disabled");
+		if (stickyLink) {
+			stickyLink.href = url;
+			stickyLink.textContent = "Save Image";
+			stickyLink.removeAttribute("aria-disabled");
+		}
+		if (stickyText) {
+			stickyText.textContent = "Download ready";
+		}
 		if (resultTitle) {
 			resultTitle.textContent = "Image is ready";
 		}
 		if (resultSubtitle) {
 			resultSubtitle.textContent = "Click save to download it to your device.";
 		}
+		UI.setDownloadStep("ready", "Download ready. Use Save Image.", false);
 	}
 
 	function exportUsingCanvas() {
@@ -280,13 +378,20 @@ UI.loadEnd = function () {
 			} else {
 				status.appendChild(a);
 			}
-		} catch (e) {
-			a.textContent = "Unable to export image";
-			a.setAttribute("aria-disabled", "true");
-			if (resultActions) {
-				resultActions.appendChild(a);
+			} catch (e) {
+				a.textContent = "Unable to export image";
+				a.setAttribute("aria-disabled", "true");
+				if (stickyLink) {
+					stickyLink.textContent = "Unable to export image";
+					stickyLink.setAttribute("aria-disabled", "true");
+				}
+				if (stickyText) {
+					stickyText.textContent = "Export failed";
+				}
+				if (resultActions) {
+					resultActions.appendChild(a);
+				}
 			}
-		}
 };
 
 /**

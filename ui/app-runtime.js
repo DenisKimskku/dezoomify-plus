@@ -7,6 +7,7 @@
     var API_KEY_STORAGE_KEY = String(opts.apiKeyStorageKey || "dezoomify:api-key:v1");
     var METRICS_TOKEN_STORAGE_KEY = String(opts.metricsTokenStorageKey || "dezoomify:metrics-token:v1");
     var METRICS_TREND_STORAGE_KEY = String(opts.metricsTrendStorageKey || "dezoomify:metrics-trend:v1");
+    var EXPERIENCE_STORAGE_KEY = String(opts.experienceStorageKey || "dezoomify:experience:v1");
     var MAX_HISTORY_ITEMS = parseInt(opts.maxHistoryItems, 10) || 80;
     var SCHEDULER_INTERVAL_MS = parseInt(opts.schedulerIntervalMs, 10) || 15000;
 
@@ -44,6 +45,7 @@
     var operationsRuntime = null;
     var bootstrapBridge = null;
     var authController = null;
+    var experienceInitialized = false;
 
     function getRuntimeUtils() {
       return window.dezoomifyRuntimeUtils || {};
@@ -71,6 +73,83 @@
     function parseDateInputFallback(value) {
       var ts = Date.parse(value);
       return isFinite(ts) ? ts : null;
+    }
+
+    function readExperienceValue() {
+      try {
+        var stored = localStorage.getItem(EXPERIENCE_STORAGE_KEY);
+        if (stored === "simple" || stored === "dashboard") return stored;
+      } catch (_) { }
+      return "simple";
+    }
+
+    function saveExperienceValue(mode) {
+      try {
+        localStorage.setItem(EXPERIENCE_STORAGE_KEY, mode);
+      } catch (_) { }
+    }
+
+    function setTabActiveState(el, active) {
+      if (!el) return;
+      if (el.classList && typeof el.classList.toggle === "function") {
+        el.classList.toggle("active", !!active);
+      } else if (typeof el.className === "string") {
+        var base = el.className.replace(/\bactive\b/g, "").replace(/\s+/g, " ").trim();
+        el.className = active ? ((base ? base + " " : "") + "active") : base;
+      }
+      if (typeof el.setAttribute === "function") {
+        el.setAttribute("aria-selected", active ? "true" : "false");
+      }
+    }
+
+    function applyExperience(mode, shouldPersist) {
+      var normalized = mode === "dashboard" ? "dashboard" : "simple";
+      if (document && document.body) {
+        document.body.setAttribute("data-experience", normalized);
+      }
+      var simpleBtn = document.getElementById("experience-simple");
+      var dashboardBtn = document.getElementById("experience-dashboard");
+      if (simpleBtn) {
+        setTabActiveState(simpleBtn, normalized === "simple");
+      }
+      if (dashboardBtn) {
+        setTabActiveState(dashboardBtn, normalized === "dashboard");
+      }
+
+      var advancedConsole = document.getElementById("advanced-console");
+      if (advancedConsole) {
+        if (normalized === "dashboard") advancedConsole.open = true;
+        if (normalized === "simple") advancedConsole.open = false;
+      }
+      if (shouldPersist) {
+        saveExperienceValue(normalized);
+      }
+    }
+
+    function initializeExperienceMode() {
+      if (experienceInitialized) return;
+      experienceInitialized = true;
+      var initial = readExperienceValue();
+      if (searchParams && typeof searchParams.get === "function") {
+        var queryMode = String(searchParams.get("view") || searchParams.get("mode") || "").trim().toLowerCase();
+        if (queryMode === "simple" || queryMode === "dashboard") {
+          initial = queryMode;
+        }
+      }
+      applyExperience(initial, false);
+
+      var simpleBtn = document.getElementById("experience-simple");
+      var dashboardBtn = document.getElementById("experience-dashboard");
+      if (simpleBtn) {
+        simpleBtn.addEventListener("click", function () {
+          applyExperience("simple", true);
+        });
+      }
+      if (dashboardBtn) {
+        dashboardBtn.addEventListener("click", function () {
+          applyExperience("dashboard", true);
+        });
+      }
     }
 
     function defaultStorageState() {
@@ -577,6 +656,7 @@
     }
 
     function startApplication() {
+      initializeExperienceMode();
       if (typeof window.createStartupSequencer !== "function") {
         startApplicationFallback();
         return true;

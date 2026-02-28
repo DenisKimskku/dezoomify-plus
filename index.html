@@ -12,7 +12,7 @@
   <link rel="icon" href="favicon.png">
   <meta name="referrer" content="same-origin">
 </head>
-<body>
+<body data-experience="simple">
   <nav class="top-nav">
     <a href="/" title="Dezoomify Plus home">
       <img src="icon.svg" alt="logo">Dezoomify Plus
@@ -23,10 +23,15 @@
     <a href="https://github.com/lovasoa/dezoomify/wiki" title="Documentation">Help</a>
   </nav>
 
-  <main class="app-shell">
+    <main class="app-shell">
     <section class="hero-card">
       <h1>Download Zoomable Images, Fast</h1>
       <p>Paste a page or manifest URL and export the highest available resolution. Public download is open; advanced queue and scheduling require sign-in.</p>
+      <div class="experience-switch" role="tablist" aria-label="Experience mode">
+        <button type="button" id="experience-simple" class="experience-tab active" data-experience="simple" role="tab" aria-selected="true">Simple Download</button>
+        <button type="button" id="experience-dashboard" class="experience-tab" data-experience="dashboard" role="tab" aria-selected="false">Dashboard</button>
+      </div>
+      <p class="hero-mode-note">Use <strong>Simple Download</strong> for one-off exports. Use <strong>Dashboard</strong> for queue, schedule, and history workflows.</p>
     </section>
 
     <section id="dezoomifiedImage" class="image-surface" aria-label="Rendered image surface">
@@ -79,6 +84,26 @@
         <p id="result-title" class="result-title">Image is ready</p>
         <p id="result-subtitle" class="result-subtitle">Click save to download it to your device.</p>
       </div>
+
+      <section id="download-steps" class="download-steps" aria-label="Download progress stages">
+        <div class="download-step active" data-step="analyze">
+          <span class="download-step-dot" aria-hidden="true"></span>
+          <span>Analyze URL</span>
+        </div>
+        <div class="download-step" data-step="fetch">
+          <span class="download-step-dot" aria-hidden="true"></span>
+          <span>Fetch Tiles</span>
+        </div>
+        <div class="download-step" data-step="compose">
+          <span class="download-step-dot" aria-hidden="true"></span>
+          <span>Compose Image</span>
+        </div>
+        <div class="download-step" data-step="ready">
+          <span class="download-step-dot" aria-hidden="true"></span>
+          <span>Ready to Save</span>
+        </div>
+      </section>
+      <p id="download-steps-status" class="ops-note">Paste a URL to begin.</p>
 
       <section id="advanced-access" class="advanced-access">
         <details id="advanced-console" class="advanced-console">
@@ -384,6 +409,11 @@
       </div>
     </section>
   </main>
+
+  <aside id="sticky-save-bar" class="sticky-save-bar" hidden>
+    <p id="sticky-save-text">Download ready</p>
+    <a id="save-image-link-sticky" href="#" aria-disabled="true">Save Image</a>
+  </aside>
 
   <script type="text/javascript" src="zoommanager.js"></script>
   <script type="text/javascript" src="dezoomers/automatic.js"></script>
