@@ -94,15 +94,29 @@ QUnit.module("Image loads", {
   beforeEach: function (assert) {
     var done = assert.async();
     var that = this;
+    var completed = false;
+    var setupTimeout = setTimeout(function () {
+      if (completed) return;
+      completed = true;
+      assert.ok(false, "Test iframe setup timed out");
+      done();
+    }, 15000);
+
+    function finishSetup() {
+      if (completed) return;
+      completed = true;
+      clearTimeout(setupTimeout);
+      done();
+    }
 
     var iframe = document.createElement("iframe");
-    iframe.src = BASE + "/index.html?app_runtime=0&worker_render=0";
-    document.body.appendChild(iframe);
-    that.iframe = iframe;
-
-    var testwin = iframe.contentWindow;
-
-    testwin.onload = function() {
+    iframe.onload = function () {
+      var testwin = iframe.contentWindow;
+      if (!testwin || !testwin.ZoomManager) {
+        assert.ok(false, "Iframe loaded but ZoomManager is missing");
+        finishSetup();
+        return;
+      }
       var ZoomManager = testwin.ZoomManager;
       // Execute the tests faster: don't wait between fake tile loads
       ZoomManager.nextTick = function(f) {return setTimeout(f,0);};
@@ -114,8 +128,15 @@ QUnit.module("Image loads", {
       that.ZoomManager = ZoomManager;
       that.UI = testwin.UI;
       that.testwin = testwin;
-      done();
-    }
+      finishSetup();
+    };
+    iframe.onerror = function () {
+      assert.ok(false, "Unable to load test iframe");
+      finishSetup();
+    };
+    iframe.src = BASE + "/index.html?app_runtime=0&worker_render=0";
+    document.body.appendChild(iframe);
+    that.iframe = iframe;
   },
   afterEach: function () {
     if (this.iframe && this.iframe.parentNode) {
@@ -131,12 +152,25 @@ browser_test_urls.forEach(function(test) {
         testwin = this.testwin;
     assert.expect(1);
     var done = assert.async();
+    var finished = false;
+    var testTimeout = setTimeout(function () {
+      if (finished) return;
+      finished = true;
+      assert.ok(false, "Timed out loading image: " + test.url);
+      done();
+    }, 20000);
+    function finish() {
+      if (finished) return;
+      finished = true;
+      clearTimeout(testTimeout);
+      done();
+    }
     ZoomManager.reset();
     ZoomManager.open(test.url);
     ZoomManager.loadEnd = function () {
       ZoomManager.reset();
       assert.ok(true, "Image loaded")
-      done();
+      finish();
     }
     ZoomManager.addTile = function (url, x, y) {
       //In order to save time & bandwidth, load only the last tile
@@ -147,7 +181,7 @@ browser_test_urls.forEach(function(test) {
           img.onload = function () {ZoomManager.status.loaded ++;};
           img.onerror = function() {
             assert.ok(false, "Invalid tile image: " + url);
-            done();
+            finish();
           }
           img.src = url;
       } else {
@@ -157,7 +191,7 @@ browser_test_urls.forEach(function(test) {
     };
     testwin.onerror = function(err, source, lineno) {
       assert.ok(false, "Dezoomify bug " + err + "\n" + source + ':' + lineno);
-      done();
+      finish();
     }
   });
 });
