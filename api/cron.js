@@ -10,6 +10,7 @@ const {
   sendJSON,
   validateCronSecret,
 } = require("../lib/jobs-service");
+const authService = require("../lib/auth-service");
 const {
   ASYNC_CLEANUP_MAX_JOBS_PER_CRON_RUN,
   ASYNC_MAX_JOBS_PER_CRON_RUN,
@@ -33,6 +34,40 @@ module.exports = async function handler(req, res) {
     sendErrorJSON(res, secretValidation.statusCode || 401, secretValidation.message || "Unauthorized.");
     finish(secretValidation.statusCode || 401, { reason: "invalid_cron_secret" });
     return;
+  }
+
+  const cronSecretConfigured = !!String(process.env.CRON_SECRET || "").trim();
+  if (!cronSecretConfigured && authService.AUTH_ENFORCE_ADVANCED) {
+    if (!authService.isStorageReadyForAuth()) {
+      sendErrorJSON(res, 503, "Persistent storage is required for authenticated cron access.", {
+        code: "STORAGE_UNAVAILABLE",
+        message: "Persistent storage is required for authenticated cron access.",
+      });
+      finish(503, { reason: "storage_unavailable" });
+      return;
+    }
+    const authResult = await authService.resolveRequestAuth(req);
+    if (!authResult || !authResult.ok) {
+      sendErrorJSON(
+        res,
+        (authResult && authResult.statusCode) || 401,
+        (authResult && authResult.message) || "Unauthorized.",
+        {
+          code: (authResult && authResult.code) || "UNAUTHORIZED",
+          message: (authResult && authResult.message) || "Unauthorized.",
+        }
+      );
+      finish((authResult && authResult.statusCode) || 401, { reason: "unauthorized" });
+      return;
+    }
+    if (!authResult.user || authResult.user.role !== "admin") {
+      sendErrorJSON(res, 403, "Admin role is required for cron execution.", {
+        code: "FORBIDDEN",
+        message: "Admin role is required for cron execution.",
+      });
+      finish(403, { reason: "forbidden" });
+      return;
+    }
   }
 
   const startedAt = Date.now();

@@ -223,11 +223,13 @@ The project includes:
 - `/api/cron` for background schedule execution.
 - `/api/metrics` for runtime service metrics snapshots.
 - `/api/benchmarks` for persistent benchmark trend history.
+- `/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/session`, `/api/auth/key`, `/api/auth/key/rotate` for account and key lifecycle.
+- `/api/storage-health` for runtime storage diagnostics.
 - `/api/submit`, `/api/status`, `/api/download`, `/api/list`, `/api/history`, `/api/retry`, `/api/retry-bulk`, `/api/remove-bulk`, `/api/cancel` for async artifact jobs and operations UX.
 - `vercel.json` rewrite from `/proxy.php` to `/api/proxy` for compatibility with existing frontend code.
-- `vercel.json` cron entry (`*/5 * * * *`) that hits `/api/cron`.
+- `vercel.json` cron entry (`0 3 * * *`) that hits `/api/cron` once daily (Hobby-compatible).
 
-Primary hosted target is Vercel serverless + optional Vercel KV REST. Non-Vercel adapters are maintained as legacy paths.
+Primary hosted target is Vercel serverless + persistent storage (`KV_REST_API_URL`/`KV_REST_API_TOKEN` or `REDIS_URL`).
 
 ## Embed in your website
 
@@ -252,12 +254,10 @@ https://your-dezoomify-app.vercel.app/?url=https%3A%2F%2Fmap-view.nls.uk%2Fiiif%
 
 The web UI now includes:
 
-- **Service Limits** card: shows proxy request quota, remaining requests, and reset countdown.
-- **Service Metrics** card: fetches `/api/metrics`, with optional token, auto-refresh, active alerts, KPI summary, and sparkline charts.
-- **Scheduled Jobs** card: create one-time/hourly/daily jobs with automatic server sync when `/api/jobs` is available.
-- **Async Queue** card: submit async jobs, poll status, retry jobs, and download finished artifacts.
-- **Job History** card: run history with status/query filters, pagination, and quick rerun.
-- **Retention** card: configure browser-local history and async-finished retention windows.
+- **Public downloader**: paste URL, tune tile concurrency, and run direct dezoomify flow.
+- **Account shell**: create account/sign in, view session state, rotate personal API key.
+- **Dashboard tabs**: queue, history, schedules, metrics, and settings (including storage health).
+- **Service limits + rate feedback**: includes retry-after behavior and quota identity details.
 - Automatic off-main-thread tile rendering in supported browsers (Web Worker + OffscreenCanvas), with fallback to classic mode.
 
 Storage fallback behavior:
@@ -290,7 +290,8 @@ Recommended environment variables:
 State backend:
 
 - Uses `KV_REST_API_URL` + `KV_REST_API_TOKEN` when configured.
-- Falls back to in-memory state if KV is unavailable.
+- Uses `REDIS_URL` when KV REST variables are not set.
+- Falls back to in-memory state for non-authenticated fallback paths only.
 
 ## Async service API (`submit/status/download/list/history/retry/retry-bulk/remove-bulk/cancel`)
 
@@ -318,6 +319,36 @@ Notes:
 - `/api/history` is owner-scoped and supports `status`, `limit`, `cursor`, and `q` filters.
 - `POST /api/cancel` cancels `queued` async jobs and returns `409` for non-cancelable states.
 - `/api/retry-bulk` and `/api/remove-bulk` are owner-scoped and capped by `ASYNC_BULK_MAX_IDS`.
+- If `AUTH_ENFORCE_ADVANCED=true`, advanced endpoints require session or user API key.
+
+## Account auth + user API keys
+
+Endpoints:
+
+- `POST /api/auth/register` body `{ "email": "...", "password": "..." }`
+- `POST /api/auth/login` body `{ "email": "...", "password": "..." }`
+- `POST /api/auth/logout`
+- `GET /api/auth/session`
+- `GET /api/auth/key`
+- `POST /api/auth/key/rotate`
+- `GET /api/storage-health`
+
+Auth environment variables:
+
+- `AUTH_ENFORCE_ADVANCED` (`true`/`false`, default `false`)
+- `AUTH_OPEN_SIGNUP` (`true`/`false`, default `true`)
+- `AUTH_SESSION_COOKIE` (default `dz_session`)
+- `AUTH_SESSION_TTL_MS` (default `604800000`)
+- `AUTH_PASSWORD_MIN_LENGTH` (default `8`)
+- `ADMIN_EMAILS` (comma-separated admin accounts)
+- `HOBBY_CRON_ONLY` (`true`/`false`) for daily-only schedule UX messaging
+
+Storage requirement:
+
+- Account features require persistent storage.
+- Configure either:
+  - `KV_REST_API_URL` + `KV_REST_API_TOKEN`, or
+  - `REDIS_URL`
 
 Environment variables:
 

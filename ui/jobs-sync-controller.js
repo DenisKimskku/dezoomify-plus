@@ -143,7 +143,7 @@
             return false;
           }
           if (result.category === "unauthorized") {
-            markServerUnavailable("API key required for server jobs");
+            markServerUnavailable("Sign in required for server jobs");
             return false;
           }
           if (result.category === "rate_limited" && result.retryAfterSeconds > 0) {
@@ -218,7 +218,7 @@
             return { loaded: false, shouldBootstrap: false };
           }
           if (result.category === "unauthorized") {
-            markServerUnavailable("API key required for server jobs");
+            markServerUnavailable("Sign in required for server jobs");
             return { loaded: false, shouldBootstrap: false };
           }
           if (result.category === "rate_limited" && result.retryAfterSeconds > 0) {

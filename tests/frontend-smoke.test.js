@@ -419,6 +419,7 @@ var tests = [
       "ui/jobs-orchestrator.js",
       "ui/jobs-sync-controller.js",
       "ui/api-key-controls.js",
+      "ui/auth-controls.js",
       "ui/service-sync-runtime.js",
       "ui/startup-sequencer.js",
       "ui/app-runtime.js",
@@ -444,6 +445,7 @@ var tests = [
     assert.strictEqual(typeof context.window.createJobsOrchestrator, "function");
     assert.strictEqual(typeof context.window.createJobsSyncController, "function");
     assert.strictEqual(typeof context.window.createAPIKeyControls, "function");
+    assert.strictEqual(typeof context.window.createAuthController, "function");
     assert.strictEqual(typeof context.window.createServiceSyncRuntime, "function");
     assert.strictEqual(typeof context.window.createStartupSequencer, "function");
     assert.strictEqual(typeof context.window.createAppRuntime, "function");
@@ -643,6 +645,7 @@ var tests = [
     var jobsPanelsMarker = 'src="ui/jobs-panels-runtime.js"';
     var serviceSyncMarker = 'src="ui/service-sync-runtime.js"';
     var startupSequencerMarker = 'src="ui/startup-sequencer.js"';
+    var authControlsMarker = 'src="ui/auth-controls.js"';
     var appRuntimeMarker = 'src="ui/app-runtime.js"';
     var initMarker = 'src="browser-init.js"';
     var runtimeUtilsPos = source.indexOf(runtimeUtilsMarker);
@@ -654,6 +657,7 @@ var tests = [
     var jobsPanelsPos = source.indexOf(jobsPanelsMarker);
     var serviceSyncPos = source.indexOf(serviceSyncMarker);
     var startupSequencerPos = source.indexOf(startupSequencerMarker);
+    var authControlsPos = source.indexOf(authControlsMarker);
     var appRuntimePos = source.indexOf(appRuntimeMarker);
     var initPos = source.indexOf(initMarker);
 
@@ -666,6 +670,7 @@ var tests = [
     assert.ok(jobsPanelsPos >= 0, "jobs panels runtime script include is required");
     assert.ok(serviceSyncPos >= 0, "service sync runtime script include is required");
     assert.ok(startupSequencerPos >= 0, "startup sequencer script include is required");
+    assert.ok(authControlsPos >= 0, "auth controls script include is required");
     assert.ok(appRuntimePos >= 0, "app runtime script include is required");
     assert.ok(initPos >= 0, "browser-init script include is required");
 
@@ -678,6 +683,7 @@ var tests = [
     assert.ok(jobsPanelsPos < initPos, "jobs panels runtime must load before browser-init");
     assert.ok(serviceSyncPos < initPos, "service sync runtime must load before browser-init");
     assert.ok(startupSequencerPos < initPos, "startup sequencer must load before browser-init");
+    assert.ok(authControlsPos < initPos, "auth controls must load before browser-init");
     assert.ok(appRuntimePos < initPos, "app runtime must load before browser-init");
   }),
 ];

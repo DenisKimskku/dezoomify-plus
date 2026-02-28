@@ -1,375 +1,335 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<!-- Contribute to dezoomify on https://github.com/lovasoa/dezoomify !-->
-
 <head>
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="script-src 'self' https://static.cloudflareinsights.com">
-  <title>Dezoomify</title>
+  <title>Dezoomify Plus</title>
   <link rel="stylesheet" media="screen" href="style.css">
-  <meta name="application-name" content="Dezoomify">
-  <meta name="description" content="Download zoomable images from websites using Zoomify, Deep Zoom, and other.">
+  <meta name="application-name" content="Dezoomify Plus">
+  <meta name="description" content="Download zoomable images from websites using Zoomify, Deep Zoom, IIIF, and more.">
   <link rel="icon" href="favicon.png">
-  <link rel="author" href="https://github.com/lovasoa/">
-  <link rel="canonical" href="https://dezoomify.ophir.dev/">
-  <meta property="og:url" content="https://dezoomify.ophir.dev/" />
-  <meta property="og:image" content="https://dezoomify.ophir.dev/cover.png" />
   <meta name="referrer" content="same-origin">
 </head>
-
 <body>
-  <nav>
-    <a href="https://dezoomify.ophir.dev/" title="Online zoomable image download.">
-      <img src="icon.svg" alt="logo" />Dezoomify</a>
-    <a href="https://lovasoa.github.io/dezoomify-extension/"
-      title="Dezoomify-extension is a browser addon that finds zoomable images in the pages you browse. It is useful when dezoomify itself does not find the image in the URL you give it.">
-      dezoomify-extension</a>
-    <a href="https://dezoomify-rs.ophir.dev/"
-      title="Dezoomify-rs is a desktop application for Windows, MacOS and Linux that can download images that are too large for dezoomify to handle, and images on servers that try to block access from dezoomify.">dezoomify-rs</a>
-    <a href="https://github.com/sponsors/lovasoa/"
-      title="Dezoomify has now reached a scale where it costs money to host it. You can participate to the hosting fees here.">donate</a>
-    <a href="https://github.com/lovasoa/dezoomify/wiki" title="The dezoomify wiki">Help</a>
+  <nav class="top-nav">
+    <a href="/" title="Dezoomify Plus home">
+      <img src="icon.svg" alt="logo">Dezoomify Plus
+    </a>
+    <a href="https://lovasoa.github.io/dezoomify-extension/" title="Browser extension">Extension</a>
+    <a href="https://dezoomify-rs.ophir.dev/" title="Desktop client">dezoomify-rs</a>
+    <a href="https://github.com/sponsors/lovasoa/" title="Support project">Donate</a>
+    <a href="https://github.com/lovasoa/dezoomify/wiki" title="Documentation">Help</a>
   </nav>
 
-  <div id="dezoomifiedImage">
-    <!-- The tiles will be drawn on this canvas.
-      Dezoomify will dynamically change it's size once the target image meta-information is loaded. -->
-    <canvas id="rendering-canvas" width="0" height="0"></canvas>
-  </div>
-  <main id="status">
-    <form id="urlform" action="#">
-      <div id="description">
-        <h1>Dezoomify <img src="icon.svg" alt="" width="20" height="20" /></h1>
+  <main class="app-shell">
+    <section class="hero-card">
+      <h1>Download Zoomable Images, Fast</h1>
+      <p>Paste a page or manifest URL and export the highest available resolution. Public download is open; advanced queue and scheduling require sign-in.</p>
+    </section>
+
+    <section id="dezoomifiedImage" class="image-surface" aria-label="Rendered image surface">
+      <canvas id="rendering-canvas" width="0" height="0"></canvas>
+    </section>
+
+    <section id="status" class="surface-card">
+      <form id="urlform" action="#">
+        <div id="description" class="compact-copy">
+          <p>
+            Supports Zoomify, Deep Zoom, IIIF and additional site-specific viewers.
+            If direct page URL parsing fails, use the browser extension to capture the exact zoom source.
+          </p>
+        </div>
+
+        <noscript>
+          <div class="error" role="alert">
+            JavaScript is required for dezoomify to work.
+          </div>
+        </noscript>
+
         <p>
-          <strong>Dezoomify</strong> allows you to download
-          <abbr title="Large images in which you can navigate inside a webpage.">
-            zoomable images</abbr>.
-          Enter the
-          <abbr title="Uniform Resource Locator, the address of a webpage">URL</abbr>
-          of such an image in the text field below.
-          The image will be downloaded at maximal resolution.
-          You can then right-click on the image,
-          and choose "Save As" in order to save it as a PNG file on your computer.
-          If it doesn't work, read our
-          <a href="https://github.com/lovasoa/dezoomify/wiki/Dezoomify-FAQ">FAQ</a>.
-          If you want more information, read our
-          <a href="https://github.com/lovasoa/dezoomify#dezoomify">project page</a>.
+          <input type="url" tabindex="10" id="url" title="Enter a webpage URL containing a zoomable image"
+            placeholder="https://example.com/zoomable-image" autofocus>
         </p>
 
-        <p id="licenseinfo">
-          This script is released under the <a href="http://www.gnu.org/licenses/gpl.html">GPL</a>.
-          <a href="http://github.com/lovasoa/dezoomify">See the source code</a>.
-          <a href="https://github.com/lovasoa/dezoomify/wiki/Legal-concerns">We decline any responsibility for an
-            illegal use of this software</a>.
-        </p>
-      </div>
+        <div id="quick-actions">
+          <button type="button" id="paste-url" class="secondary-action" title="Paste from clipboard">Paste URL</button>
+          <button type="button" class="secondary-action example-url"
+            data-example-url="https://map-view.nls.uk/iiif/19619%2F196194600/info.json"
+            title="Use public IIIF sample">Try Sample</button>
+        </div>
 
-      <!--[if lte IE 9]>
-      <div id="browserwarning" class="error" hidden>
-        <h2>Warning</h2>
-        <p>Unfortunately, Internet Explorer doesn't support
-        the features used in dezoomify. Please use a recent version of
-          <a href="https://www.mozilla.org/en-US/firefox/new/">Firefox</a> or
-          <a href="https://www.google.com/chrome/">Chrome</a>.</p>
-      </div>
-      <![endif]-->
+        <div id="performance-controls">
+          <label for="tile-concurrency">Tile concurrency</label>
+          <input type="range" id="tile-concurrency" min="2" max="20" step="1" value="12"
+            title="Higher values can be faster but may trigger rate limits.">
+          <span id="tile-concurrency-value">12</span>
+        </div>
 
-      <noscript>
-        <div class="error" role="alert">
-          Dezoomify uses javascript to do it's magic.
-          But javascript seems to be disabled on your browser.
-          Here are the
-          <a href="http://www.enable-javascript.com/">
-            instructions how to enable JavaScript in your web browser
-          </a>.
-        </div>
-      </noscript>
+        <p id="dezoomers"></p>
+        <input type="submit" tabindex="30" class="button" value="Start Download">
+      </form>
 
-      <p>
-        <input type='url' tabindex="10" id='url' title="Enter the URL of the webpage containing your zoomable image"
-          placeholder="URL of the webpage containing your image" autofocus>
-      </p>
-      <div id="quick-actions">
-        <button type="button" id="paste-url" class="secondary-action" title="Paste a URL from your clipboard">Paste URL</button>
-        <button type="button" class="secondary-action example-url" data-example-url="https://map-view.nls.uk/iiif/19619%2F196194600/info.json"
-          title="Use a public IIIF sample URL">Try sample URL</button>
-      </div>
-      <div id="performance-controls">
-        <label for="tile-concurrency">Download speed:</label>
-        <input type="range" id="tile-concurrency" min="2" max="20" step="1" value="12"
-          title="Higher values can be faster, but may trigger rate limits on some websites.">
-        <span id="tile-concurrency-value">12</span>
-      </div>
-      <p id="dezoomers"></p>
-      <input type='submit' tabindex="30" class="button" value="Dezoomify !"
-        title="Click to start downloading the image">
-    </form>
-
-    <details id="operations-shell">
-      <summary id="operations-shell-summary">
-        <span class="ops-shell-title">Open Job Console</span>
-        <span class="ops-shell-subtitle">Queue, history, scheduling, metrics, and limits</span>
-      </summary>
-      <section id="operations">
-      <article class="ops-card" id="limits-card">
-        <h2>Service Limits</h2>
-        <div class="mini-form" id="api-key-form">
-          <input type="password" id="api-key-input" placeholder="Optional API key">
-          <div class="mini-actions">
-            <button type="button" id="api-key-save" class="secondary-action">Save Key</button>
-            <button type="button" id="api-key-clear" class="secondary-action">Clear Key</button>
-          </div>
+      <section id="auth-shell" class="auth-shell" aria-label="Account access">
+        <div class="auth-head">
+          <h2>Account</h2>
+          <p id="auth-status">Checking session...</p>
         </div>
-        <p id="rate-limit-summary">Waiting for first proxy request.</p>
-        <p id="jobs-storage-mode" class="ops-note">Storage mode: browser local (offline fallback).</p>
-        <p class="ops-note">This helps keep the service stable when traffic spikes. API key is stored in your browser only.</p>
-      </article>
-      <article class="ops-card" id="metrics-card">
-        <h2>Service Metrics</h2>
-        <div class="mini-form" id="metrics-form">
-          <input type="password" id="metrics-token-input" placeholder="Optional metrics token">
-          <div class="mini-actions">
-            <button type="button" id="metrics-token-save" class="secondary-action">Save Token</button>
-            <button type="button" id="metrics-token-clear" class="secondary-action">Clear Token</button>
-            <button type="button" id="metrics-refresh" class="secondary-action">Refresh</button>
-            <label class="inline-toggle">
-              <input type="checkbox" id="metrics-auto-refresh" checked>
-              Auto
-            </label>
-          </div>
-        </div>
-        <p id="metrics-status" class="ops-note">Waiting for metrics snapshot.</p>
-        <div id="metrics-alerts" class="metrics-alerts">
-          <p class="ops-empty">No active alerts.</p>
-        </div>
-        <div id="metrics-kpis" class="metrics-kpis">
-          <div class="metric-kpi">
-            <span class="metric-kpi-label">Requests (window)</span>
-            <strong id="metrics-kpi-requests">0</strong>
-          </div>
-          <div class="metric-kpi">
-            <span class="metric-kpi-label">5xx Ratio</span>
-            <strong id="metrics-kpi-error-rate">0%</strong>
-          </div>
-          <div class="metric-kpi">
-            <span class="metric-kpi-label">Quota Blocks/min</span>
-            <strong id="metrics-kpi-quota">0</strong>
-          </div>
-        </div>
-        <p id="metrics-change" class="ops-note">No trend delta yet.</p>
-        <div class="metrics-charts">
-          <div class="metrics-chart">
-            <p class="metrics-chart-title">Requests per minute</p>
-            <svg id="metrics-chart-requests" viewBox="0 0 220 52" preserveAspectRatio="none" aria-label="Requests per minute chart"></svg>
-          </div>
-          <div class="metrics-chart">
-            <p class="metrics-chart-title">Errors + quota blocks per minute</p>
-            <svg id="metrics-chart-health" viewBox="0 0 220 52" preserveAspectRatio="none" aria-label="Errors and quota chart"></svg>
-          </div>
-        </div>
-        <pre id="metrics-summary">No metrics loaded.</pre>
-      </article>
-      <article class="ops-card" id="schedule-card">
-        <h2>Scheduled Jobs</h2>
-        <form id="schedule-form" class="mini-form" action="#">
-          <input type="url" id="schedule-url" placeholder="https://example.com/zoomable-page" required>
-          <div class="mini-row">
-            <input type="datetime-local" id="schedule-time" required>
-            <select id="schedule-repeat">
-              <option value="none">One-time</option>
-              <option value="hourly">Every hour</option>
-              <option value="daily">Every day</option>
-            </select>
-          </div>
-          <div class="mini-actions">
-            <button type="submit" class="secondary-action">Add Schedule</button>
-            <button type="button" id="schedule-use-current" class="secondary-action">Use Current URL</button>
-          </div>
-        </form>
-        <p id="schedule-status" class="ops-note">Schedule panel ready.</p>
-        <p id="schedule-empty" class="ops-empty">No scheduled jobs.</p>
-        <div id="schedule-list" class="ops-list"></div>
-      </article>
-      <article class="ops-card" id="async-card">
-        <h2>Async Queue</h2>
-        <form id="async-form" class="mini-form" action="#">
-          <input type="url" id="async-url" placeholder="https://example.com/zoomable-page" required>
-          <div class="mini-actions">
-            <button type="submit" class="secondary-action">Submit Job</button>
-            <button type="button" id="async-use-current" class="secondary-action">Use Current URL</button>
-            <label class="inline-toggle">
-              <input type="checkbox" id="async-process-now">
-              Process now
-            </label>
-          </div>
-        </form>
-        <div id="async-filters" class="mini-form">
-          <div class="mini-row">
-            <select id="async-filter-status" aria-label="Filter async jobs by status">
-              <option value="">All statuses</option>
-              <option value="queued">Queued</option>
-              <option value="running">Running</option>
-              <option value="completed">Completed</option>
-              <option value="error">Error</option>
-              <option value="expired">Expired</option>
-              <option value="canceled">Canceled</option>
-              <option value="missing">Missing</option>
-            </select>
-            <input type="search" id="async-filter-query" placeholder="Search id, URL, or message">
-          </div>
-          <div class="mini-actions">
-            <button type="button" id="async-filter-apply" class="secondary-action">Apply</button>
-            <button type="button" id="async-filter-reset" class="secondary-action">Reset</button>
-            <button type="button" id="async-bulk-retry-failed" class="secondary-action">Retry Visible Failed</button>
-            <button type="button" id="async-bulk-remove-finished" class="secondary-action">Remove Visible Finished</button>
-          </div>
+        <div class="auth-grid">
+          <input type="email" id="auth-email" placeholder="you@example.com" autocomplete="email">
+          <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password">
         </div>
         <div class="mini-actions">
-          <button type="button" id="async-refresh" class="secondary-action">Refresh</button>
-          <button type="button" id="async-clear-local" class="secondary-action">Clear Tracked</button>
-          <label class="inline-toggle">
-            <input type="checkbox" id="async-auto-refresh" checked>
-            Auto
-          </label>
+          <button type="button" id="auth-login" class="secondary-action">Sign In</button>
+          <button type="button" id="auth-register" class="secondary-action">Create Account</button>
+          <button type="button" id="auth-logout" class="secondary-action">Sign Out</button>
         </div>
-        <p id="async-status" class="ops-note">No async jobs submitted yet.</p>
-        <p id="async-empty" class="ops-empty">No tracked async jobs.</p>
-        <div id="async-list" class="ops-list"></div>
-        <button type="button" id="async-load-more" class="secondary-action" style="display:none">Load More</button>
-      </article>
-      <article class="ops-card" id="history-card">
-        <h2>Job History</h2>
-        <div class="mini-form" id="history-filters">
-          <div class="mini-row">
-            <select id="history-filter-status" aria-label="Filter history by status">
-              <option value="">All statuses</option>
-              <option value="success">Success</option>
-              <option value="error">Error</option>
-              <option value="running">Running</option>
-            </select>
-            <input type="search" id="history-filter-query" placeholder="Search URL, message, id">
-          </div>
-          <div class="mini-actions">
-            <button type="button" id="history-filter-apply" class="secondary-action">Apply</button>
-            <button type="button" id="history-filter-reset" class="secondary-action">Reset</button>
-          </div>
+        <div class="auth-meta">
+          <span id="auth-user">Not signed in.</span>
+          <span id="auth-key-preview">API key: unavailable</span>
         </div>
         <div class="mini-actions">
-          <button type="button" id="clear-history" class="secondary-action">Clear History</button>
+          <button type="button" id="auth-key-refresh" class="secondary-action">Refresh Key Info</button>
+          <button type="button" id="auth-key-rotate" class="secondary-action">Rotate API Key</button>
         </div>
-        <p id="history-status" class="ops-note">History view ready.</p>
-        <div class="mini-actions">
-          <button type="button" id="history-page-prev" class="secondary-action">Previous</button>
-          <button type="button" id="history-page-next" class="secondary-action">Next</button>
-          <span id="history-page-info" class="ops-note">Page 1</span>
-        </div>
-        <p id="history-empty" class="ops-empty">No jobs yet.</p>
-        <div id="history-list" class="ops-list"></div>
-      </article>
-      <article class="ops-card" id="retention-card">
-        <h2>Retention</h2>
-        <div class="mini-form">
-          <label>
-            History keep-days
-            <input type="number" min="1" max="3650" step="1" id="retention-history-days" value="30">
-          </label>
-          <label>
-            Async finished keep-days
-            <input type="number" min="1" max="3650" step="1" id="retention-async-days" value="7">
-          </label>
-          <div class="mini-actions">
-            <button type="button" id="retention-save" class="secondary-action">Save Retention</button>
-          </div>
-        </div>
-        <p id="retention-status" class="ops-note">Retention settings loaded.</p>
-      </article>
       </section>
-    </details>
 
-    <p id="percent" role="status"></p>
-    <p id="progressbar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></p>
+      <section id="dashboard-shell" class="dashboard-shell" aria-label="Advanced dashboard">
+        <div id="dashboard-gate" class="dashboard-gate" hidden>
+          Sign in to access async queue, scheduling, history, retention, and metrics controls.
+        </div>
 
-    <div id="error" class="error" role="alert" hidden>
-      <h3>
-        <img id="error-img" src="data:image/bmp;base64,Qk0eAAAAAAAAABoAAAAMAAAAAQABAAEAGAAAAP8A" alt="" width="30"
-          height="30">
-        Oops, we have a problem
-      </h3>
-      <div>
-        <p>An error occured while trying to dezoomify your image.
-          This is probably because dezoomify did not manage to find a zoomable image
-          at the address you gave.
-        </p>
-        <p>
-          You can try to install the
-          <a class="extension-link" href="https://lovasoa.github.io/dezoomify-extension/">
-            <b>dezoomify browser extension</b></a>,
-          that can find the address of dezoomable images automatically
-          on the pages you visit.
-        <p>
-          If that does not help, then you should read our
-          <a href="https://github.com/lovasoa/dezoomify/wiki/Dezoomify-FAQ">Frequently Asked Questions</a>.
-        </p>
-        <p>
-          If your image is extremely large and it does not show in your browser,
-          see our <a href='https://github.com/lovasoa/dezoomify/wiki/Very-large-images'>advices for large images</a>.
-        </p>
+        <div class="dashboard-header">
+          <h2>Dashboard</h2>
+          <div class="dashboard-tabs" role="tablist" aria-label="Dashboard sections">
+            <button type="button" class="dashboard-tab active" data-tab="queue" role="tab" aria-selected="true">Queue</button>
+            <button type="button" class="dashboard-tab" data-tab="history" role="tab" aria-selected="false">History</button>
+            <button type="button" class="dashboard-tab" data-tab="schedule" role="tab" aria-selected="false">Schedules</button>
+            <button type="button" class="dashboard-tab" data-tab="metrics" role="tab" aria-selected="false">Metrics</button>
+            <button type="button" class="dashboard-tab" data-tab="settings" role="tab" aria-selected="false">Settings</button>
+          </div>
+        </div>
 
+        <div class="dashboard-panels">
+          <section class="dashboard-panel active" data-panel="queue" aria-label="Async queue panel">
+            <article class="ops-card" id="async-card">
+              <h2>Async Queue</h2>
+              <form id="async-form" class="mini-form" action="#">
+                <input type="url" id="async-url" placeholder="https://example.com/zoomable-page" required>
+                <div class="mini-actions">
+                  <button type="submit" class="secondary-action">Submit Job</button>
+                  <button type="button" id="async-use-current" class="secondary-action">Use Current URL</button>
+                  <label class="inline-toggle">
+                    <input type="checkbox" id="async-process-now">
+                    Process now
+                  </label>
+                </div>
+              </form>
+              <div id="async-filters" class="mini-form">
+                <div class="mini-row">
+                  <select id="async-filter-status" aria-label="Filter async jobs by status">
+                    <option value="">All statuses</option>
+                    <option value="queued">Queued</option>
+                    <option value="running">Running</option>
+                    <option value="completed">Completed</option>
+                    <option value="error">Error</option>
+                    <option value="expired">Expired</option>
+                    <option value="canceled">Canceled</option>
+                    <option value="missing">Missing</option>
+                  </select>
+                  <input type="search" id="async-filter-query" placeholder="Search id, URL, or message">
+                </div>
+                <div class="mini-actions">
+                  <button type="button" id="async-filter-apply" class="secondary-action">Apply</button>
+                  <button type="button" id="async-filter-reset" class="secondary-action">Reset</button>
+                  <button type="button" id="async-bulk-retry-failed" class="secondary-action">Retry Visible Failed</button>
+                  <button type="button" id="async-bulk-remove-finished" class="secondary-action">Remove Visible Finished</button>
+                </div>
+              </div>
+              <div class="mini-actions">
+                <button type="button" id="async-refresh" class="secondary-action">Refresh</button>
+                <button type="button" id="async-clear-local" class="secondary-action">Clear Tracked</button>
+                <label class="inline-toggle">
+                  <input type="checkbox" id="async-auto-refresh" checked>
+                  Auto
+                </label>
+              </div>
+              <p id="async-status" class="ops-note">No async jobs submitted yet.</p>
+              <p id="async-empty" class="ops-empty">No tracked async jobs.</p>
+              <div id="async-list" class="ops-list"></div>
+              <button type="button" id="async-load-more" class="secondary-action" style="display:none">Load More</button>
+            </article>
+          </section>
+
+          <section class="dashboard-panel" data-panel="history" aria-label="Job history panel">
+            <article class="ops-card" id="history-card">
+              <h2>Job History</h2>
+              <div class="mini-form" id="history-filters">
+                <div class="mini-row">
+                  <select id="history-filter-status" aria-label="Filter history by status">
+                    <option value="">All statuses</option>
+                    <option value="success">Success</option>
+                    <option value="error">Error</option>
+                    <option value="running">Running</option>
+                  </select>
+                  <input type="search" id="history-filter-query" placeholder="Search URL, message, id">
+                </div>
+                <div class="mini-actions">
+                  <button type="button" id="history-filter-apply" class="secondary-action">Apply</button>
+                  <button type="button" id="history-filter-reset" class="secondary-action">Reset</button>
+                </div>
+              </div>
+              <div class="mini-actions">
+                <button type="button" id="clear-history" class="secondary-action">Clear History</button>
+              </div>
+              <p id="history-status" class="ops-note">History view ready.</p>
+              <div class="mini-actions">
+                <button type="button" id="history-page-prev" class="secondary-action">Previous</button>
+                <button type="button" id="history-page-next" class="secondary-action">Next</button>
+                <span id="history-page-info" class="ops-note">Page 1</span>
+              </div>
+              <p id="history-empty" class="ops-empty">No jobs yet.</p>
+              <div id="history-list" class="ops-list"></div>
+            </article>
+          </section>
+
+          <section class="dashboard-panel" data-panel="schedule" aria-label="Schedule panel">
+            <article class="ops-card" id="schedule-card">
+              <h2>Scheduled Jobs</h2>
+              <form id="schedule-form" class="mini-form" action="#">
+                <input type="url" id="schedule-url" placeholder="https://example.com/zoomable-page" required>
+                <div class="mini-row">
+                  <input type="datetime-local" id="schedule-time" required>
+                  <select id="schedule-repeat">
+                    <option value="none">One-time</option>
+                    <option value="hourly">Every hour</option>
+                    <option value="daily">Every day</option>
+                  </select>
+                </div>
+                <div class="mini-actions">
+                  <button type="submit" class="secondary-action">Add Schedule</button>
+                  <button type="button" id="schedule-use-current" class="secondary-action">Use Current URL</button>
+                </div>
+              </form>
+              <p id="schedule-status" class="ops-note">Schedule panel ready.</p>
+              <p id="schedule-empty" class="ops-empty">No scheduled jobs.</p>
+              <div id="schedule-list" class="ops-list"></div>
+            </article>
+          </section>
+
+          <section class="dashboard-panel" data-panel="metrics" aria-label="Metrics panel">
+            <article class="ops-card" id="limits-card">
+              <h2>Service Limits</h2>
+              <div class="mini-form" id="api-key-form">
+                <input type="password" id="api-key-input" placeholder="Optional legacy API key">
+                <div class="mini-actions">
+                  <button type="button" id="api-key-save" class="secondary-action">Save Key</button>
+                  <button type="button" id="api-key-clear" class="secondary-action">Clear Key</button>
+                </div>
+              </div>
+              <p id="rate-limit-summary">Waiting for first proxy request.</p>
+              <p id="jobs-storage-mode" class="ops-note">Storage mode: browser local (offline fallback).</p>
+            </article>
+
+            <article class="ops-card" id="metrics-card">
+              <h2>Service Metrics</h2>
+              <div class="mini-form" id="metrics-form">
+                <input type="password" id="metrics-token-input" placeholder="Optional metrics token">
+                <div class="mini-actions">
+                  <button type="button" id="metrics-token-save" class="secondary-action">Save Token</button>
+                  <button type="button" id="metrics-token-clear" class="secondary-action">Clear Token</button>
+                  <button type="button" id="metrics-refresh" class="secondary-action">Refresh</button>
+                  <label class="inline-toggle">
+                    <input type="checkbox" id="metrics-auto-refresh" checked>
+                    Auto
+                  </label>
+                </div>
+              </div>
+              <p id="metrics-status" class="ops-note">Waiting for metrics snapshot.</p>
+              <div id="metrics-alerts" class="metrics-alerts">
+                <p class="ops-empty">No active alerts.</p>
+              </div>
+              <div id="metrics-kpis" class="metrics-kpis">
+                <div class="metric-kpi">
+                  <span class="metric-kpi-label">Requests (window)</span>
+                  <strong id="metrics-kpi-requests">0</strong>
+                </div>
+                <div class="metric-kpi">
+                  <span class="metric-kpi-label">5xx Ratio</span>
+                  <strong id="metrics-kpi-error-rate">0%</strong>
+                </div>
+                <div class="metric-kpi">
+                  <span class="metric-kpi-label">Quota Blocks/min</span>
+                  <strong id="metrics-kpi-quota">0</strong>
+                </div>
+              </div>
+              <p id="metrics-change" class="ops-note">No trend delta yet.</p>
+              <div class="metrics-charts">
+                <div class="metrics-chart">
+                  <p class="metrics-chart-title">Requests per minute</p>
+                  <svg id="metrics-chart-requests" viewBox="0 0 220 52" preserveAspectRatio="none" aria-label="Requests per minute chart"></svg>
+                </div>
+                <div class="metrics-chart">
+                  <p class="metrics-chart-title">Errors + quota blocks per minute</p>
+                  <svg id="metrics-chart-health" viewBox="0 0 220 52" preserveAspectRatio="none" aria-label="Errors and quota chart"></svg>
+                </div>
+              </div>
+              <pre id="metrics-summary">No metrics loaded.</pre>
+            </article>
+          </section>
+
+          <section class="dashboard-panel" data-panel="settings" aria-label="Settings panel">
+            <article class="ops-card" id="retention-card">
+              <h2>Retention</h2>
+              <div class="mini-form">
+                <label>
+                  History keep-days
+                  <input type="number" min="1" max="3650" step="1" id="retention-history-days" value="30">
+                </label>
+                <label>
+                  Async finished keep-days
+                  <input type="number" min="1" max="3650" step="1" id="retention-async-days" value="7">
+                </label>
+                <div class="mini-actions">
+                  <button type="button" id="retention-save" class="secondary-action">Save Retention</button>
+                </div>
+              </div>
+              <p id="retention-status" class="ops-note">Retention settings loaded.</p>
+            </article>
+
+            <article class="ops-card" id="storage-card">
+              <h2>Storage Health</h2>
+              <p id="storage-health-status" class="ops-note">Not checked yet.</p>
+              <div class="mini-actions">
+                <button type="button" id="storage-health-refresh" class="secondary-action">Refresh Storage Health</button>
+              </div>
+              <p class="ops-note" id="onboarding-checklist">Checklist: sign in, rotate API key, test async submit, test schedule, verify history.</p>
+            </article>
+          </section>
+        </div>
+      </section>
+
+      <p id="percent" role="status"></p>
+      <p id="progressbar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></p>
+
+      <div id="error" class="error" role="alert" hidden>
+        <h3>
+          <img id="error-img" src="data:image/bmp;base64,Qk0eAAAAAAAAABoAAAAMAAAAAQABAAEAGAAAAP8A" alt="" width="28" height="28">
+          Download failed
+        </h3>
+        <p>We couldn't dezoomify that URL. Try using the browser extension to capture the exact source URL, or test with a direct manifest/image endpoint.</p>
+        <details>
+          <summary>Technical details</summary>
+          <pre id="errormsg"></pre>
+        </details>
         <p>
-          Dezoomify also has a github bug tracker, where you can interact with other users
-          as well as with me, the developer, if you create a free github account :
-        <ul>
-          <li>
-            <a href="https://github.com/lovasoa/dezoomify/issues?q=" id="gh-search">search for issues similar to
-              yours</a>:
-            maybe someone already managed to download images from your website and explained how.
-          </li>
-          <li>
-            <a href="https://github.com/lovasoa/dezoomify/issues/new?template=1_bug_report.md">report a bug</a>
-            if you think this is an issue with dezoomify itself.
-            Use this link only if the image is in a format that is supported by dezoomify, yet it doesn't open
-            correctly. I try to fix bugs in dezoomify in a timely manner.
-          </li>
-          <li>
-            <a href="https://github.com/lovasoa/dezoomify/issues/new" id="gh-open-issue">ask for support with this
-              particular site</a>:
-            I do not have a lot of time to allocate to dezoomify, but sometimes, I add support for new websites.
-            You can also <a href="https://ophir.dev/">contact me</a> if you want paid personalized support.
-          </li>
-        </ul>
-        If you decide to write something on the bug tracker, then please
-        be polite, try to explain your issue in details in english, and include the technical details below.
+          <a href="https://github.com/lovasoa/dezoomify/wiki/Dezoomify-FAQ">FAQ</a> ·
+          <a href="https://github.com/lovasoa/dezoomify/issues?q=" id="gh-search">Search issues</a> ·
+          <a href="https://github.com/lovasoa/dezoomify/issues/new?template=1_bug_report.md" id="gh-open-issue">Report bug</a>
         </p>
       </div>
-      <div id="errormsg">
-        <p>
-          Try to extract the zoomifyImagePath in the webpage containing
-          the zoomify viewer on your own, and paste this path to the form
-          on this page.
-          Search 'zoomifyImagePath' in the source code of the page
-          (the one you can get with the DOM inspector of your browser).
-        </p>
-        <p>Exemple of path :
-          <code>http://images.famsf.org/Zoom/7822312331480020/</code>
-        </p>
-      </div>
-    </div>
-
-    <div id="popup" style="display:none">
-      <button aria-label="Close" title="Close">×</button>
-      <b>Thank you !</b>
-      <p>
-        Thanks to your mobilization, we were able to upgrade our hosting plan,
-        and we are now successfully handling over 200.000 individual requests per day.
-        You can still <a href="https://github.com/sponsors/lovasoa/">participate to the hosting fees</a>
-        to help the project.
-        <small><a href="https://github.com/lovasoa/dezoomify/issues/337#issuecomment-773498488">More info</a></small>
-      </p>
-    </div>
-
+    </section>
   </main>
 
   <script type="text/javascript" src="zoommanager.js"></script>
@@ -409,9 +369,8 @@
   <script type="text/javascript" src="ui/api-key-controls.js"></script>
   <script type="text/javascript" src="ui/service-sync-runtime.js"></script>
   <script type="text/javascript" src="ui/startup-sequencer.js"></script>
+  <script type="text/javascript" src="ui/auth-controls.js"></script>
   <script type="text/javascript" src="ui/app-runtime.js"></script>
   <script type="text/javascript" src="browser-init.js"></script>
-
 </body>
-
 </html>

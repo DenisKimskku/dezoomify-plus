@@ -8,6 +8,34 @@
   ],
   "rewrites": [
     {
+      "source": "/api/auth/register",
+      "destination": "/api/observability?scope=auth&action=register"
+    },
+    {
+      "source": "/api/auth/login",
+      "destination": "/api/observability?scope=auth&action=login"
+    },
+    {
+      "source": "/api/auth/logout",
+      "destination": "/api/observability?scope=auth&action=logout"
+    },
+    {
+      "source": "/api/auth/session",
+      "destination": "/api/observability?scope=auth&action=session"
+    },
+    {
+      "source": "/api/auth/key",
+      "destination": "/api/observability?scope=auth&action=key"
+    },
+    {
+      "source": "/api/auth/key/rotate",
+      "destination": "/api/observability?scope=auth&action=key_rotate"
+    },
+    {
+      "source": "/api/storage-health",
+      "destination": "/api/observability?scope=storage"
+    },
+    {
       "source": "/api/metrics",
       "destination": "/api/observability?scope=metrics"
     },

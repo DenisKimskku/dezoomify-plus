@@ -37,6 +37,8 @@ jobs:
           node --check api/bulk.js
           node --check api/cancel.js
           node --check lib/jobs-service.js
+          node --check lib/auth-service.js
+          node --check lib/storage-service.js
           node --check lib/benchmark-trends.js
           node --check lib/async-service.js
           node --check lib/observability.js
@@ -57,6 +59,7 @@ jobs:
           node --check ui/jobs-orchestrator.js
           node --check ui/jobs-sync-controller.js
           node --check ui/api-key-controls.js
+          node --check ui/auth-controls.js
           node --check ui/service-sync-runtime.js
           node --check ui/startup-sequencer.js
           node --check ui/app-runtime.js
@@ -78,6 +81,8 @@ jobs:
         run: node tests/history-handler.test.js
       - name: Run deterministic cron tests
         run: node tests/cron-handler.test.js
+      - name: Run deterministic auth flow tests
+        run: node tests/auth-flow.test.js
       - name: Run deterministic metrics tests
         run: node tests/metrics-handler.test.js
       - name: Run deterministic benchmark API tests

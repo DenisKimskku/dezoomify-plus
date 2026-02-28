@@ -22,6 +22,7 @@
     "test:async-handlers": "node async-handlers.test.js",
     "test:history-handler": "node history-handler.test.js",
     "test:cron": "node cron-handler.test.js",
+    "test:auth": "node auth-flow.test.js",
     "test:iiif": "node iiif-fastpath.test.js",
     "test:zoommanager": "node zoommanager-queue.test.js",
     "test:frontend-smoke": "node frontend-smoke.test.js",

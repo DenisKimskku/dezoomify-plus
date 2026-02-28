@@ -14,6 +14,7 @@
       if (started) return true;
       started = true;
 
+      callIfFunction(opts.initializeAuthRuntime);
       callIfFunction(opts.initializeJobsRuntime);
       callIfFunction(opts.initializeServiceSyncRuntime);
       callIfFunction(opts.initializeOperationsRuntime);

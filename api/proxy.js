@@ -4,6 +4,7 @@ const dns = require("dns").promises;
 const net = require("net");
 const crypto = require("crypto");
 const { createRequestObserver } = require("../lib/observability");
+const authService = require("../lib/auth-service");
 
 const MAX_REDIRECTS = 3;
 const MAX_COOKIE_LENGTH = 8192;
@@ -283,24 +284,50 @@ function sanitizeApiKey(rawKey) {
   return key;
 }
 
-function resolveQuotaIdentity(req, clientKey) {
+async function resolveQuotaIdentity(req, clientKey) {
   let providedAPIKey = "";
   try {
     providedAPIKey = sanitizeApiKey(extractApiKey(req));
   } catch (error) {
     return { error: error.message || String(error), statusCode: 400 };
   }
+
+  if (providedAPIKey && authService.isStorageReadyForAuth()) {
+    const authResult = await authService.resolveRequestAuth(req);
+    if (authResult && authResult.ok && authResult.user) {
+      return {
+        identity: authResult.user.email || ("user:" + authResult.user.id),
+        storageKey: "user:" + authResult.user.id,
+        minuteQuota: DEFAULT_API_MINUTE_QUOTA,
+        dailyQuota: DEFAULT_API_DAILY_QUOTA,
+      };
+    }
+  }
+
   if (providedAPIKey) {
     const plan = API_KEY_CONFIG.get(providedAPIKey);
-    if (!plan) {
-      return { error: "Invalid API key.", statusCode: 401 };
+    if (plan) {
+      return {
+        identity: plan.label,
+        storageKey: "apikey:" + plan.id,
+        minuteQuota: plan.minuteQuota,
+        dailyQuota: plan.dailyQuota,
+      };
     }
-    return {
-      identity: plan.label,
-      storageKey: "apikey:" + plan.id,
-      minuteQuota: plan.minuteQuota,
-      dailyQuota: plan.dailyQuota,
-    };
+    return { error: "Invalid API key.", statusCode: 401 };
+  }
+
+  const hasSessionCookie = !!authService.extractSessionIDFromReq(req);
+  if (hasSessionCookie && authService.isStorageReadyForAuth()) {
+    const authResult = await authService.resolveRequestAuth(req);
+    if (authResult && authResult.ok && authResult.user) {
+      return {
+        identity: authResult.user.email || ("user:" + authResult.user.id),
+        storageKey: "user:" + authResult.user.id,
+        minuteQuota: DEFAULT_API_MINUTE_QUOTA,
+        dailyQuota: DEFAULT_API_DAILY_QUOTA,
+      };
+    }
   }
 
   if (API_AUTH_REQUIRED || API_DISABLE_ANON) {
@@ -545,7 +572,7 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const identity = resolveQuotaIdentity(req, clientKey);
+  const identity = await resolveQuotaIdentity(req, clientKey);
   if (identity.error) {
     sendError(res, identity.statusCode, identity.error, ipRateLimitInfo, null, null);
     finish(identity.statusCode || 400, { reason: "identity_resolution_failed" });

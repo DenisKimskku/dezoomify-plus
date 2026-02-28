@@ -34,9 +34,12 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const owner = resolveOwnerContext(req);
+  const owner = await resolveOwnerContext(req);
   if (owner.error) {
-    sendErrorJSON(res, owner.statusCode || 400, owner.error);
+    sendErrorJSON(res, owner.statusCode || 400, owner.error, {
+      code: owner.code || "REQUEST_FAILED",
+      message: owner.error,
+    });
     finish(owner.statusCode || 400, { reason: "owner_resolution_failed" });
     return;
   }

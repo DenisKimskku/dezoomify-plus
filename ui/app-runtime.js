@@ -41,6 +41,7 @@
     var serviceSyncRuntime = null;
     var operationsRuntime = null;
     var bootstrapBridge = null;
+    var authController = null;
 
     function getRuntimeUtils() {
       return window.dezoomifyRuntimeUtils || {};
@@ -134,6 +135,14 @@
       return ((ZoomManager && ZoomManager.api_key) ? ZoomManager.api_key : "").trim();
     }
 
+    function isAdvancedAccessAllowed() {
+      if (!authController) return true;
+      if (typeof authController.isAuthEnforced !== "function") return true;
+      if (!authController.isAuthEnforced()) return true;
+      if (typeof authController.isAuthenticated !== "function") return false;
+      return !!authController.isAuthenticated();
+    }
+
     function getActiveJob() {
       if (!jobsRuntime || typeof jobsRuntime.getActiveJob !== "function") return null;
       return jobsRuntime.getActiveJob();
@@ -208,6 +217,7 @@
     }
 
     async function fetchMetricsSnapshot(force) {
+      if (!isAdvancedAccessAllowed()) return false;
       if (!operationsRuntime || typeof operationsRuntime.fetchMetricsSnapshot !== "function") {
         return false;
       }
@@ -215,6 +225,7 @@
     }
 
     async function refreshAsyncJobs(force) {
+      if (!isAdvancedAccessAllowed()) return false;
       if (!operationsRuntime || typeof operationsRuntime.refreshAsyncJobs !== "function") {
         return false;
       }
@@ -229,18 +240,21 @@
     }
 
     function getAsyncPollIntervalMs() {
+      if (!isAdvancedAccessAllowed()) return 120000;
       var summary = getAsyncActivitySummary();
       if ((summary && parseInt(summary.pending, 10) > 0) || getActiveJob()) return 5000;
       return 20000;
     }
 
     function getMetricsPollIntervalMs() {
+      if (!isAdvancedAccessAllowed()) return 120000;
       var summary = getAsyncActivitySummary();
       if ((summary && parseInt(summary.pending, 10) > 0) || getActiveJob()) return 15000;
       return 45000;
     }
 
     function getServerPollIntervalMs() {
+      if (!isAdvancedAccessAllowed()) return 120000;
       var hasSchedules = false;
       if (jobsRuntime && typeof jobsRuntime.getSchedules === "function") {
         var schedules = jobsRuntime.getSchedules();
@@ -347,6 +361,30 @@
       jobsPanelsRuntime.initialize();
     }
 
+    function initializeAuthRuntime() {
+      if (typeof window.createAuthController !== "function") return;
+      authController = window.createAuthController({
+        sessionEndpoint: "/api/auth/session",
+        loginEndpoint: "/api/auth/login",
+        registerEndpoint: "/api/auth/register",
+        logoutEndpoint: "/api/auth/logout",
+        keyEndpoint: "/api/auth/key",
+        rotateEndpoint: "/api/auth/key/rotate",
+        storageHealthEndpoint: "/api/storage-health",
+        onChange: function () {
+          if (serviceSyncRuntime && typeof serviceSyncRuntime.reloadForIdentity === "function") {
+            serviceSyncRuntime.reloadForIdentity();
+          }
+          if (isAdvancedAccessAllowed()) {
+            refreshAsyncJobs(true);
+            fetchMetricsSnapshot(true);
+            fetchServerState(true, false);
+          }
+        },
+      });
+      authController.initialize();
+    }
+
     function initializeServiceSyncRuntime() {
       if (typeof window.createServiceSyncRuntime !== "function") {
         ZoomManager.api_key = "";
@@ -451,6 +489,7 @@
         onTickSchedules: tickSchedules,
         onRateLimitTick: updateRateLimitSummary,
         onPollServer: function () {
+          if (!isAdvancedAccessAllowed()) return;
           if (getActiveJob()) return;
           return fetchServerState(false, false);
         },
@@ -458,12 +497,14 @@
           return getServerPollIntervalMs();
         },
         onPollMetrics: function () {
+          if (!isAdvancedAccessAllowed()) return;
           return fetchMetricsSnapshot(false);
         },
         getMetricsPollIntervalMs: function () {
           return getMetricsPollIntervalMs();
         },
         onPollAsync: function () {
+          if (!isAdvancedAccessAllowed()) return;
           return refreshAsyncJobs(false);
         },
         getAsyncPollIntervalMs: function () {
@@ -495,6 +536,7 @@
     }
 
     function startApplicationFallback() {
+      initializeAuthRuntime();
       initializeJobsRuntime();
       initializeServiceSyncRuntime();
       initializeOperationsRuntime();
@@ -520,6 +562,7 @@
         return true;
       }
       var startupSequencer = window.createStartupSequencer({
+        initializeAuthRuntime: initializeAuthRuntime,
         initializeJobsRuntime: initializeJobsRuntime,
         initializeServiceSyncRuntime: initializeServiceSyncRuntime,
         initializeOperationsRuntime: initializeOperationsRuntime,
