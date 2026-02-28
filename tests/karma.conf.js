@@ -23,6 +23,7 @@ module.exports = function(config) {
       {pattern:'render-worker.js', included:false},
       {pattern:'ui/*.js', included:false},
       {pattern:'dezoomers/*js', included:false},
+      {pattern:'tests/images/**/*', included:false},
       'tests/test_urls.js',
       'tests/tests.js',
     ],
